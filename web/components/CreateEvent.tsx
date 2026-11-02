@@ -12,7 +12,7 @@ type Form = {
 };
 
 export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: { name?: string; currency?: 'dUSD' | 'POT' }; onCancel: () => void; onCreated: (id: number) => void }) {
-  const { address, write } = useWallet();
+  const { address, ss58, write } = useWallet();
   const [f, setF] = useState<Form>({ name: initial.name ?? '', date: '', time: '19:00', capacity: '', currency: initial.currency ?? 'dUSD', price: '', perWallet: '0', royalty: '5', venue: '', description: '' });
   const [accounts, setAccounts] = useState<{ address: string; meta: { name?: string } }[]>();
   const [subAccount, setSubAccount] = useState<string>();
@@ -57,10 +57,10 @@ export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: {
     substrateAccounts()
       .then((a) => {
         setAccounts(a);
-        setSubAccount(a[0]?.address);
+        setSubAccount((a.find((x) => x.address === ss58) ?? a[0])?.address); // the signed-in Portaldot account when there is one
       })
       .catch((err) => setError(explain(err)));
-  }, [hasMedia, accounts]);
+  }, [hasMedia, accounts, ss58]);
 
   async function pick(kind: 'image' | 'ticket', file?: File) {
     if (!file) return;
@@ -78,13 +78,12 @@ export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: {
         uri = await storeMedia(bundle, subAccount, setStatus);
       }
       setStatus('Confirm the event in your wallet…');
-      const hash = await write('createEvent', args(uri));
-      const receipt = await client.getTransactionReceipt({ hash });
-      const created = receipt.logs
+      const { logs } = await write('createEvent', args(uri));
+      const created = logs
         .filter((l) => l.address.toLowerCase() === DOORLIST.toLowerCase())
         .map((l) => {
           try {
-            return decodeEventLog({ abi: doorlistAbi as never, data: l.data, topics: l.topics }) as unknown as { eventName: string; args: { eventId: bigint } };
+            return decodeEventLog({ abi: doorlistAbi as never, data: l.data, topics: l.topics as never }) as unknown as { eventName: string; args: { eventId: bigint } };
           } catch {
             return null;
           }

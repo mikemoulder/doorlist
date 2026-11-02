@@ -1,19 +1,32 @@
 'use client';
-// Wallet connection (EIP-6963 discovery, falling back to window.ethereum) and every write to the chain.
+// Wallet connection and every write to the chain. Two ways in, one app:
+//  - Portaldot Wallet and other Substrate extensions (5... accounts): calls go through revive.call (lib/substrate.ts)
+//  - Ethereum-style wallets (EIP-6963, falling back to window.ethereum): calls go through the eth RPC
+// Either way `address` is the 0x address the contracts see, so every read works the same.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { BaseError, ContractFunctionRevertedError, createWalletClient, custom, numberToHex, type Address, type Hash } from 'viem';
+import { BaseError, ContractFunctionRevertedError, createWalletClient, custom, numberToHex, type Abi, type Address, type Hash } from 'viem';
 import { client, DOORLIST, doorlistAbi, portaldot } from './chain';
+import {
+  ContractRevert, contractAddress, ensureMapped, reviveWrite, sendNative, signText, substrateAccountsOf, substrateExtensions,
+  type ContractLog, type SubstrateAccount,
+} from './substrate';
 
 type Provider = { request: (a: { method: string; params?: unknown[] }) => Promise<unknown>; on?: (e: string, f: (x: unknown) => void) => void };
 type Announced = { info: { name: string; icon: string; rdns: string }; provider: Provider };
+type Active = { kind: 'evm'; wallet: Announced } | { kind: 'substrate'; account: SubstrateAccount };
+
+export type WriteResult = { hash: Hash; logs: ContractLog[] };
 
 type WalletState = {
   address?: Address;
+  /** 'substrate' when signed in with a 5... account (Portaldot Wallet); its SS58 address is in `ss58`. */
+  kind?: Active['kind'];
+  ss58?: string;
   wallets: Announced[];
   connecting: boolean;
-  connect: (w?: Announced) => Promise<Address | undefined>;
+  connect: () => Promise<Address | undefined>;
   disconnect: () => void;
-  write: (functionName: string, args: unknown[], opts?: { value?: bigint; to?: Address; abi?: readonly unknown[] }) => Promise<Hash>;
+  write: (functionName: string, args: unknown[], opts?: { value?: bigint; to?: Address; abi?: readonly unknown[] }) => Promise<WriteResult>;
   signMessage: (message: string) => Promise<`0x${string}`>;
   sendValue: (to: Address, value: bigint) => Promise<Hash>;
 };
@@ -42,6 +55,7 @@ const REASONS: Record<string, string> = {
 };
 
 export function explain(err: unknown): string {
+  if (err instanceof ContractRevert) return (err.errorName && REASONS[err.errorName]) || err.message;
   if (err instanceof BaseError) {
     const revert = err.walk((e) => e instanceof ContractFunctionRevertedError) as ContractFunctionRevertedError | null;
     const name = revert?.data?.errorName;
@@ -50,16 +64,19 @@ export function explain(err: unknown): string {
     if (/insufficient|funds/i.test(err.message)) return 'Not enough POT in this wallet for the network fee.';
     return err.shortMessage;
   }
-  return err instanceof Error ? err.message : String(err);
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/cancelled|rejected|denied/i.test(msg)) return 'You cancelled the confirmation in your wallet.';
+  if (/Inability to pay|balance too low|Payment/i.test(msg)) return 'Not enough POT in this wallet for the network fee.';
+  return msg;
 }
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [wallets, setWallets] = useState<Announced[]>([]);
-  const [active, setActive] = useState<Announced>();
+  const [active, setActive] = useState<Active>();
   const [address, setAddress] = useState<Address>();
   const [connecting, setConnecting] = useState(false);
 
-  // EIP-6963: wallets announce themselves.
+  // EIP-6963: Ethereum-style wallets announce themselves.
   useEffect(() => {
     const seen = new Map<string, Announced>();
     const onAnnounce = (e: Event) => {
@@ -93,18 +110,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // connect() without a wallet opens the chooser and resolves once the person picks one or closes it.
-  const [picking, setPicking] = useState(false);
-  const [pickError, setPickError] = useState<string>();
-  const pending = useRef<(a: Address | undefined) => void>(undefined);
-
-  const connectTo = useCallback(
+  const connectEvm = useCallback(
     async (target: Announced) => {
       setConnecting(true);
       try {
         const [a] = (await target.provider.request({ method: 'eth_requestAccounts' })) as Address[];
         await ensureChain(target.provider);
-        setActive(target);
+        setActive({ kind: 'evm', wallet: target });
         setAddress(a);
         localStorage.setItem(STORAGE_KEY, target.info.rdns);
         target.provider.on?.('accountsChanged', (x) => setAddress((x as Address[])[0]));
@@ -116,17 +128,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [ensureChain],
   );
 
-  const connect = useCallback(
-    (w?: Announced) => {
-      if (w) return connectTo(w);
-      setPickError(undefined);
-      setPicking(true);
-      return new Promise<Address | undefined>((resolve) => {
-        pending.current = resolve;
-      });
-    },
-    [connectTo],
-  );
+  const connectSubstrate = useCallback(async (account: SubstrateAccount) => {
+    setConnecting(true);
+    try {
+      const a = await contractAddress(account.ss58);
+      await ensureMapped(account);
+      setActive({ kind: 'substrate', account });
+      setAddress(a);
+      localStorage.setItem(STORAGE_KEY, `sub:${account.source}:${account.ss58}`);
+      return a;
+    } finally {
+      setConnecting(false);
+    }
+  }, []);
+
+  // connect() opens the chooser and resolves once the person picks an account or closes it.
+  const [picking, setPicking] = useState(false);
+  const pending = useRef<(a: Address | undefined) => void>(undefined);
+
+  const connect = useCallback(() => {
+    setPicking(true);
+    return new Promise<Address | undefined>((resolve) => {
+      pending.current = resolve;
+    });
+  }, []);
 
   const closePicker = useCallback((a?: Address) => {
     setPicking(false);
@@ -134,27 +159,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     pending.current = undefined;
   }, []);
 
-  const choose = useCallback(
-    async (w: Announced) => {
-      setPickError(undefined);
-      try {
-        closePicker(await connectTo(w));
-      } catch (err) {
-        setPickError(explain(err));
-      }
-    },
-    [connectTo, closePicker],
-  );
-
   // Reconnect silently to the wallet used last time.
   useEffect(() => {
-    const rdns = localStorage.getItem(STORAGE_KEY);
-    const w = wallets.find((x) => x.info.rdns === rdns);
-    if (!w || active) return;
+    if (active) return;
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+    if (saved.startsWith('sub:')) {
+      const [, source, ss58] = saved.split(':');
+      const t = setTimeout(() => {
+        if (!substrateExtensions().some((x) => x.source === source)) return;
+        substrateAccountsOf(source)
+          .then((accts) => accts.find((x) => x.ss58 === ss58))
+          .then(async (account) => {
+            if (!account) return;
+            setActive({ kind: 'substrate', account });
+            setAddress(await contractAddress(account.ss58));
+          })
+          .catch(() => undefined);
+      }, 300);
+      return () => clearTimeout(t);
+    }
+    const w = wallets.find((x) => x.info.rdns === saved);
+    if (!w) return;
     w.provider.request({ method: 'eth_accounts' }).then((accts) => {
       const [a] = accts as Address[];
       if (a) {
-        setActive(w);
+        setActive({ kind: 'evm', wallet: w });
         setAddress(a);
         w.provider.on?.('accountsChanged', (x) => setAddress((x as Address[])[0]));
       }
@@ -170,9 +200,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const write = useCallback<WalletState['write']>(
     async (functionName, args, opts = {}) => {
       if (!active || !address) throw new Error('Sign in with your wallet first.');
-      await ensureChain(active.provider);
-      const wallet = createWalletClient({ account: address, chain: portaldot, transport: custom(active.provider) });
-      const call = { address: opts.to ?? DOORLIST, abi: (opts.abi ?? doorlistAbi) as never, functionName: functionName as never, args: args as never, account: address, value: opts.value };
+      const to = opts.to ?? DOORLIST;
+      const abi = (opts.abi ?? doorlistAbi) as Abi;
+      if (active.kind === 'substrate') return reviveWrite(active.account, { to, abi, functionName, args, value: opts.value });
+
+      await ensureChain(active.wallet.provider);
+      const wallet = createWalletClient({ account: address, chain: portaldot, transport: custom(active.wallet.provider) });
+      const call = { address: to, abi: abi as never, functionName: functionName as never, args: args as never, account: address, value: opts.value };
       await client.simulateContract(call); // surfaces the contract's own revert reason before the wallet opens
       const [gas, gasPrice] = await Promise.all([client.estimateContractGas(call), client.getGasPrice()]);
       // Legacy type with an exact price: Portaldot gas figures are large, and a 2x max fee asks for more balance than exists.
@@ -180,7 +214,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const hash = await wallet.writeContract({ ...call, gas: (gas * 11n) / 10n, gasPrice, type: 'legacy' } as never);
       const receipt = await client.waitForTransactionReceipt({ hash });
       if (receipt.status !== 'success') throw new Error('The confirmation failed on the network.');
-      return hash;
+      return { hash, logs: receipt.logs.map((l) => ({ address: l.address, topics: l.topics as ContractLog['topics'], data: l.data })) };
     },
     [active, address, ensureChain],
   );
@@ -188,7 +222,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const signMessage = useCallback<WalletState['signMessage']>(
     async (message) => {
       if (!active || !address) throw new Error('Sign in with your wallet first.');
-      const wallet = createWalletClient({ account: address, chain: portaldot, transport: custom(active.provider) });
+      if (active.kind === 'substrate') return signText(active.account, message);
+      const wallet = createWalletClient({ account: address, chain: portaldot, transport: custom(active.wallet.provider) });
       return wallet.signMessage({ account: address, message });
     },
     [active, address],
@@ -197,8 +232,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const sendValue = useCallback<WalletState['sendValue']>(
     async (to, value) => {
       if (!active || !address) throw new Error('Sign in with your wallet first.');
-      await ensureChain(active.provider);
-      const wallet = createWalletClient({ account: address, chain: portaldot, transport: custom(active.provider) });
+      if (active.kind === 'substrate') return (await sendNative(active.account, to, value)).hash;
+      await ensureChain(active.wallet.provider);
+      const wallet = createWalletClient({ account: address, chain: portaldot, transport: custom(active.wallet.provider) });
       const [gas, gasPrice] = await Promise.all([client.estimateGas({ account: address, to, value }), client.getGasPrice()]);
       const hash = await wallet.sendTransaction({ account: address, to, value, gas: (gas * 11n) / 10n, gasPrice, type: 'legacy' } as never);
       await client.waitForTransactionReceipt({ hash });
@@ -207,53 +243,128 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [active, address, ensureChain],
   );
 
+  const kind = active?.kind;
+  const ss58 = active?.kind === 'substrate' ? active.account.ss58 : undefined;
   const value = useMemo(
-    () => ({ address, wallets, connecting, connect, disconnect, write, signMessage, sendValue }),
-    [address, wallets, connecting, connect, disconnect, write, signMessage, sendValue],
+    () => ({ address, kind, ss58, wallets, connecting, connect, disconnect, write, signMessage, sendValue }),
+    [address, kind, ss58, wallets, connecting, connect, disconnect, write, signMessage, sendValue],
   );
   return (
     <Ctx.Provider value={value}>
       {children}
-      {picking && <WalletPicker wallets={wallets} connecting={connecting} error={pickError} onPick={choose} onClose={() => closePicker()} />}
+      {picking && (
+        <WalletPicker
+          wallets={wallets}
+          connecting={connecting}
+          onEvm={connectEvm}
+          onSubstrate={connectSubstrate}
+          onDone={closePicker}
+        />
+      )}
     </Ctx.Provider>
   );
 }
 
-function WalletPicker({ wallets, connecting, error, onPick, onClose }: {
-  wallets: Announced[]; connecting: boolean; error?: string; onPick: (w: Announced) => void; onClose: () => void;
+const short = (s: string) => `${s.slice(0, 6)}…${s.slice(-4)}`;
+
+function WalletPicker({ wallets, connecting, onEvm, onSubstrate, onDone }: {
+  wallets: Announced[];
+  connecting: boolean;
+  onEvm: (w: Announced) => Promise<Address>;
+  onSubstrate: (a: SubstrateAccount) => Promise<Address>;
+  onDone: (a?: Address) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const [extensions, setExtensions] = useState<{ source: string; title: string }[]>([]);
+  const [accounts, setAccounts] = useState<{ title: string; list: SubstrateAccount[] }>();
+  const [error, setError] = useState<string>();
+
   useEffect(() => {
     ref.current?.showModal();
+    // Extensions inject at document start, but give a slow one a moment.
+    setExtensions(substrateExtensions());
+    const t = setTimeout(() => setExtensions(substrateExtensions()), 500);
+    return () => clearTimeout(t);
   }, []);
+
+  async function run(f: () => Promise<Address>) {
+    setError(undefined);
+    try {
+      onDone(await f());
+    } catch (err) {
+      setError(explain(err));
+    }
+  }
+
+  async function openExtension(source: string, title: string) {
+    setError(undefined);
+    try {
+      const list = await substrateAccountsOf(source);
+      if (!list.length) throw new Error(`${title} has no Portaldot (5…) account yet. Create one in the wallet, then try again.`);
+      if (list.length === 1) return run(() => onSubstrate(list[0]));
+      setAccounts({ title, list });
+    } catch (err) {
+      setError(explain(err));
+    }
+  }
+
+  const none = !extensions.length && !wallets.length;
   return (
-    <dialog ref={ref} className="picker" aria-labelledby="picker-title" onClose={onClose} onClick={(e) => e.target === ref.current && onClose()}>
+    <dialog ref={ref} className="picker" aria-labelledby="picker-title" onClose={() => onDone()} onClick={(e) => e.target === ref.current && onDone()}>
       <div className="picker-body">
-        <h2 id="picker-title">Sign in with a wallet</h2>
-        {wallets.length ? (
+        <h2 id="picker-title">{accounts ? `Choose an account in ${accounts.title}` : 'Sign in with a wallet'}</h2>
+        {accounts ? (
           <ul>
-            {wallets.map((w) => (
-              <li key={w.info.rdns}>
-                <button className="picker-row" onClick={() => onPick(w)} disabled={connecting}>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- wallet icons are data URIs from EIP-6963 */}
-                  {w.info.icon ? <img src={w.info.icon} alt="" width={28} height={28} /> : <span className="picker-blank" aria-hidden="true" />}
-                  <span>{w.info.name}</span>
+            {accounts.list.map((a) => (
+              <li key={a.ss58}>
+                <button className="picker-row" onClick={() => run(() => onSubstrate(a))} disabled={connecting}>
+                  <span className="picker-blank" aria-hidden="true" />
+                  <span>
+                    {a.name ?? 'Account'} <span className="faint">{short(a.ss58)}</span>
+                  </span>
                 </button>
               </li>
             ))}
           </ul>
+        ) : none ? (
+          <p className="muted">No wallet found in this browser. Install the Portaldot Wallet from portaldot.world, then reload this page.</p>
         ) : (
-          <p className="muted">No wallet found in this browser. Install SubWallet or MetaMask, then reload this page.</p>
+          <ul>
+            {extensions.map((x) => (
+              <li key={`sub-${x.source}`}>
+                <button className="picker-row" onClick={() => openExtension(x.source, x.title)} disabled={connecting}>
+                  <span className="picker-blank" aria-hidden="true" />
+                  <span>{x.title}</span>
+                </button>
+              </li>
+            ))}
+            {wallets.map((w) => (
+              <li key={w.info.rdns}>
+                <button className="picker-row" onClick={() => run(() => onEvm(w))} disabled={connecting}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- wallet icons are data URIs from EIP-6963 */}
+                  {w.info.icon ? <img src={w.info.icon} alt="" width={28} height={28} /> : <span className="picker-blank" aria-hidden="true" />}
+                  <span>
+                    {w.info.name} <span className="faint">(0x account)</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
         {connecting && <p className="faint">Check your wallet to approve the sign-in.</p>}
         {error && <p className="notice notice-error">{error}</p>}
         <div className="picker-foot">
-          {!wallets.length && (
-            <a className="pill pill-primary" href="https://www.subwallet.app/" target="_blank" rel="noreferrer">
-              Get SubWallet
+          {none && (
+            <a className="pill pill-primary" href="https://www.portaldot.world" target="_blank" rel="noreferrer">
+              Get the Portaldot Wallet
             </a>
           )}
-          <button className="pill pill-ghost" onClick={onClose}>
+          {accounts && (
+            <button className="pill pill-ghost" onClick={() => setAccounts(undefined)}>
+              Back
+            </button>
+          )}
+          <button className="pill pill-ghost" onClick={() => onDone()}>
             Close
           </button>
         </div>
