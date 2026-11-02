@@ -11,9 +11,9 @@ type Form = {
   perWallet: string; royalty: string; venue: string; description: string; image?: string; ticket?: string;
 };
 
-export function CreateEvent({ onCancel, onCreated }: { onCancel: () => void; onCreated: (id: number) => void }) {
+export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: { name?: string; currency?: 'dUSD' | 'POT' }; onCancel: () => void; onCreated: (id: number) => void }) {
   const { address, write } = useWallet();
-  const [f, setF] = useState<Form>({ name: '', date: '', time: '19:00', capacity: '100', currency: 'dUSD', price: '25', perWallet: '4', royalty: '5', venue: '', description: '' });
+  const [f, setF] = useState<Form>({ name: initial.name ?? '', date: '', time: '19:00', capacity: '', currency: initial.currency ?? 'dUSD', price: '', perWallet: '0', royalty: '5', venue: '', description: '' });
   const [accounts, setAccounts] = useState<{ address: string; meta: { name?: string } }[]>();
   const [subAccount, setSubAccount] = useState<string>();
   const [deposit, setDeposit] = useState<bigint>();

@@ -15,6 +15,17 @@ export default function OrganizePage() {
   const [events, setEvents] = useState<DoorEvent[]>();
   const [selected, setSelected] = useState<number>();
   const [creating, setCreating] = useState(false);
+  const [prefill, setPrefill] = useState<{ name?: string; currency?: 'dUSD' | 'POT' }>({});
+
+  // Arriving from the landing page's "Name your event": open the form with that name.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const name = q.get('name');
+    if (name) {
+      setPrefill({ name, currency: q.get('currency') === 'POT' ? 'POT' : 'dUSD' });
+      setCreating(true);
+    }
+  }, []);
 
   const load = useCallback(() => {
     if (!address) return;
@@ -50,6 +61,7 @@ export default function OrganizePage() {
         </div>
       ) : creating ? (
         <CreateEvent
+          initial={prefill}
           onCancel={() => setCreating(false)}
           onCreated={(id) => {
             setCreating(false);
