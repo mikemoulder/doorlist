@@ -6,7 +6,7 @@ import { CalendarDays, Check, Gift, MapPin, ShieldCheck, Ticket as TicketIcon, U
 import { isAddress, maxUint256, type Address } from 'viem';
 import { AppShell } from '@/components/AppShell';
 import { Cover, DoorsBar, StatusTag, useMedia } from '@/components/EventBits';
-import { client, DOORLIST, erc20Abi, NATIVE } from '@/lib/chain';
+import { client, DOORLIST, DUSD, erc20Abi, FAUCET, NATIVE } from '@/lib/chain';
 import { getCheckIns, getEvent, getListings, heldBy, phase, PAYOUT_DELAY, type DoorEvent, type Ticket } from '@/lib/doorlist';
 import { money, price, shortAddress, when } from '@/lib/format';
 import { explain, useWallet } from '@/lib/wallet';
@@ -149,6 +149,8 @@ function BuyPanel({ e, onBought }: { e: DoorEvent; onBought: () => void }) {
   const [balance, setBalance] = useState<bigint>();
   const [allowance, setAllowance] = useState<bigint>();
   const [mine, setMine] = useState<number>();
+  const [claimed, setClaimed] = useState<boolean>();
+  const [claiming, setClaiming] = useState(false);
   const native = e.currency.address === NATIVE;
   const p = phase(e);
   const recipient = (gift ? to : address) as Address | undefined;
@@ -167,7 +169,10 @@ function BuyPanel({ e, onBought }: { e: DoorEvent; onBought: () => void }) {
       setAllowance(a as bigint);
     });
     heldBy(e.id, address).then(setMine);
-  }, [address, e, native, step]);
+    if (e.currency.address.toLowerCase() === DUSD.address.toLowerCase()) {
+      client.readContract({ address: FAUCET.address, abi: FAUCET.abi, functionName: 'claimed', args: [address] }).then(setClaimed);
+    }
+  }, [address, e, native, step, claiming]);
 
   const needsApproval = !native && allowance !== undefined && allowance < e.price;
   const enough = balance === undefined || balance >= e.price;
@@ -186,6 +191,18 @@ function BuyPanel({ e, onBought }: { e: DoorEvent; onBought: () => void }) {
     } catch (err) {
       setError(explain(err));
       setStep('idle');
+    }
+  }
+
+  async function getTestDollars() {
+    setError(undefined);
+    setClaiming(true);
+    try {
+      await write('claim', [], { to: FAUCET.address, abi: FAUCET.abi });
+    } catch (err) {
+      setError(explain(err));
+    } finally {
+      setClaiming(false);
     }
   }
 
@@ -260,7 +277,16 @@ function BuyPanel({ e, onBought }: { e: DoorEvent; onBought: () => void }) {
                 {mine !== undefined && e.maxPerWallet > 0 && <>You hold {mine} of {e.maxPerWallet} allowed. </>}
                 A small network fee in POT applies.
               </p>
-              {!enough && <p className="notice notice-error">Not enough {e.currency.symbol} in this wallet.</p>}
+              {!enough && claimed === false ? (
+                <div className="notice">
+                  <p>Not enough {e.currency.symbol} in this wallet. dUSD is a test dollar on Portaldot, and each wallet can collect {money(FAUCET.amount, e.currency)} once.</p>
+                  <button className="pill" onClick={getTestDollars} disabled={claiming} style={{ marginTop: 10 }}>
+                    {claiming ? 'Collecting…' : `Get ${money(FAUCET.amount, e.currency)}`}
+                  </button>
+                </div>
+              ) : (
+                !enough && <p className="notice notice-error">Not enough {e.currency.symbol} in this wallet.{claimed && ' This wallet has already collected its test dUSD.'}</p>
+              )}
             </>
           )}
           {error && <p className="notice notice-error">{error}</p>}

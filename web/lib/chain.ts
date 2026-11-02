@@ -23,6 +23,17 @@ export const DUSD = {
   symbol: 'dUSD',
   decimals: 6,
 };
+/** Test faucet: 100 dUSD once per address (deployments/dusd-faucet.json). */
+export const FAUCET = {
+  address: '0xF7EF82239bDEB68AF78bAA8ABA24eb93C2188A3F' as Address,
+  amount: 100_000_000n,
+  abi: [
+    { type: 'function', name: 'claim', stateMutability: 'nonpayable', inputs: [], outputs: [] },
+    { type: 'function', name: 'claimed', stateMutability: 'view', inputs: [{ name: 'a', type: 'address' }], outputs: [{ type: 'bool' }] },
+    { type: 'error', name: 'AlreadyClaimed', inputs: [] },
+    { type: 'error', name: 'PoolEmpty', inputs: [] },
+  ],
+} as const;
 export const NATIVE = '0x0000000000000000000000000000000000000000' as Address;
 
 export const client = createPublicClient({ chain: portaldot, transport: http(deployment.rpc, { retryCount: 3 }) });

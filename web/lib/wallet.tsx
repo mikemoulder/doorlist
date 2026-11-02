@@ -36,6 +36,8 @@ const REASONS: Record<string, string> = {
   TooEarly: 'Payout opens 24 hours after the event starts.',
   TooLate: 'The cancel window has closed.',
   RoyaltyTooHigh: 'The resale royalty can be at most 10%.',
+  AlreadyClaimed: 'This wallet has already collected its test dUSD.',
+  PoolEmpty: 'The test dUSD faucet is empty. Ask the Doorlist team for more.',
   PayoutFailed: 'The payment could not be completed. Check your balance and approval.',
 };
 
