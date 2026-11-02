@@ -34,11 +34,12 @@ Thumbs.db
 .idea/
 *.swp
 
-# Markdown: only the README and the docs it links to belong in the repo.
-# Working notes stay local.
-handoff.md
-memory.md
-docs/design-notes.md
+# Markdown: only the README files and the docs the README links to belong in the repo.
+# Everything else (handoff, memory, CLAUDE.md, design notes, skill docs) stays local.
+*.md
+!/README.md
+!/web/README.md
+!/docs/architecture.md
 
 # Private research notes (competitor analysis, strategy)
 hack.md
