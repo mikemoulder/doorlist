@@ -34,12 +34,11 @@ Thumbs.db
 .idea/
 *.swp
 
-# Deliberately NOT ignored:
-#   *.md          docs/ is judge-facing evidence (architecture, integrations,
-#                 evaluation map). Ignoring markdown hides it.
-#   handoff.md    shared continuity. a teammate who slept needs to read it.
-#   memory.md     shared project knowledge.
-# See references/repo-hygiene.md before adding a markdown rule here.
+# Markdown: only the README and the docs it links to belong in the repo.
+# Working notes stay local.
+handoff.md
+memory.md
+docs/design-notes.md
 
 # Private research notes (competitor analysis, strategy)
 hack.md
