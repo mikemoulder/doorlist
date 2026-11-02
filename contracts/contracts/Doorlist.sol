@@ -10,9 +10,10 @@ interface IERC20 {
 
 /// @title Doorlist: wallet-bound event tickets that can't be faked or copied, with refunds
 /// enforced by code.
-/// @notice A ticket is a token owned by a wallet. It only moves through Doorlist: every
-/// resale or gift burns the old token and mints a new one to the new owner, so any QR code
-/// made for the old token id dies with it. Tokens emit ERC-721 `Transfer` events.
+/// @notice A ticket is a token owned by a wallet. It only moves through Doorlist resales:
+/// each one burns the old token and mints a new one to the new owner, so any QR code made
+/// for the old token id dies with it. Tokens emit ERC-721 `Transfer` events. There is no
+/// free transfer; to give a ticket, buy it (new or resale) with the friend's address as `to`.
 ///
 /// At the door: the owner's wallet signs a pass for their phone once; the phone then shows
 /// a QR refreshed every few seconds. The door app checks that the pass was signed by
@@ -24,7 +25,7 @@ interface IERC20 {
 /// - Until then the organizer may cancel. A cancelled event can never be withdrawn by the
 ///   organizer; every holder claims a full face-price refund from escrow, no organizer needed.
 /// - Resales at any price settle instantly: 3% fee, a per-event organizer royalty (0 to 10%),
-///   the rest to the seller. Gifts are free.
+///   the rest to the seller.
 contract Doorlist {
     uint256 public constant PLATFORM_FEE_BPS = 300; // 3%
     uint256 public constant MAX_ROYALTY_BPS = 1000; // 10%
@@ -39,7 +40,7 @@ contract Doorlist {
         uint32 sold;
         uint32 maxPerWallet; // 0 = no limit
         uint16 royaltyBps; // organizer's cut of every resale
-        bool cancelled; // no sales, transfers or check-ins; holders can claim refunds
+        bool cancelled; // no sales, resales or check-ins; holders can claim refunds
         uint128 price; // face price, in the smallest unit of `currency`
         uint128 escrowed; // first-sale money held for this event
         address currency; // address(0) = native tPOT, else an ERC-20 (e.g. a native asset precompile)
@@ -63,7 +64,7 @@ contract Doorlist {
     event EventCreated(uint256 indexed eventId, address indexed organizer, string name);
     event DoorSet(uint256 indexed eventId, address indexed door, bool allowed);
     event Listed(uint256 indexed ticketId, uint128 price);
-    event Reminted(uint256 indexed oldId, uint256 indexed newId, uint128 price); // price 0 = gift
+    event Reminted(uint256 indexed oldId, uint256 indexed newId, uint128 price);
     event CheckedIn(uint256 indexed ticketId, uint256 indexed eventId, address door);
     event EventCancelled(uint256 indexed eventId);
     event Refunded(uint256 indexed ticketId, address indexed holder, uint128 amount);
@@ -109,14 +110,15 @@ contract Doorlist {
         emit DoorSet(eventId, door, allowed);
     }
 
-    /// @notice Buy at face price. The money stays in escrow until the organizer can withdraw.
-    function buy(uint256 eventId) external payable returns (uint256 ticketId) {
+    /// @notice Buy at face price for `to` (yourself, or a friend as a gift). The money stays
+    /// in escrow until the organizer can withdraw. `to`'s per-wallet limit applies.
+    function buy(uint256 eventId, address to) external payable returns (uint256 ticketId) {
         Event storage e = events[eventId];
         if (e.cancelled) revert Cancelled();
         if (e.sold >= e.capacity) revert SoldOut();
         e.sold++;
         e.escrowed += e.price;
-        ticketId = _mint(eventId, msg.sender);
+        ticketId = _mint(eventId, to);
         _checkValue(e.currency, e.price);
         _send(e.currency, msg.sender, address(this), e.price);
     }
@@ -129,26 +131,21 @@ contract Doorlist {
         emit Listed(ticketId, price);
     }
 
-    /// @notice Buy a listed ticket. The old token is burned and a new one minted to the buyer.
-    function buyResale(uint256 ticketId) external payable returns (uint256 newId) {
+    /// @notice Buy a listed ticket for `to` (yourself or a friend). The old token is burned and
+    /// a new one minted to `to`.
+    function buyResale(uint256 ticketId, address to) external payable returns (uint256 newId) {
         Ticket storage t = _live(ticketId);
         uint128 price = t.askPrice;
         if (price == 0) revert NotListed();
         Event storage e = events[t.eventId];
         address seller = t.owner;
-        newId = _remint(ticketId, msg.sender, price);
+        newId = _remint(ticketId, to, price);
         _checkValue(e.currency, price);
         uint256 fee = price * PLATFORM_FEE_BPS / 10_000;
         uint256 royalty = price * e.royaltyBps / 10_000;
         _send(e.currency, msg.sender, treasury, fee);
         _send(e.currency, msg.sender, e.organizer, royalty);
         _send(e.currency, msg.sender, seller, price - fee - royalty);
-    }
-
-    /// @notice Give a ticket to another wallet, free. Burned and re-minted to `to`.
-    function transfer(uint256 ticketId, address to) external returns (uint256 newId) {
-        if (_live(ticketId).owner != msg.sender) revert NotOwner();
-        newId = _remint(ticketId, to, 0);
     }
 
     function checkIn(uint256 ticketId) external {
@@ -159,7 +156,7 @@ contract Doorlist {
         emit CheckedIn(ticketId, t.eventId, msg.sender);
     }
 
-    /// @notice Cancel before the payout window opens. Sales, transfers and check-ins stop, the
+    /// @notice Cancel before the payout window opens. Sales, resales and check-ins stop, the
     /// organizer can never withdraw, and every holder can claim a full refund.
     function cancelEvent(uint256 eventId) external {
         Event storage e = events[eventId];

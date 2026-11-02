@@ -10,7 +10,7 @@ through its ERC-20 precompile.
  (MetaMask)                           (door key, no wallet popups)
         |                                   |
         |  createEvent, buy, list,          |  1. scan QR, verify pass + signature
-        |  buyResale, transfer, withdraw    |  2. checkIn(ticketId)
+        |  buyResale, withdraw              |  2. checkIn(ticketId)
         v                                   v
  +--------------------------------------------------+
  |  Doorlist.sol  (pallet_revive, chain 420420777)  |
@@ -28,16 +28,17 @@ through its ERC-20 precompile.
 |---|---|---|---|
 | 1 | Organizer creates "Demo Day", 25 dUSD, 50 seats | MetaMask tx | `createEvent` stores the event |
 | 2 | Organizer opens the door page on a phone | Generates a door key, organizer authorizes it | `setDoor(event, doorKey, true)` |
-| 3 | Guest buys a ticket | Approve + buy from their wallet | Payment goes into escrow; a ticket token is minted to the guest's wallet |
+| 3 | Guest buys a ticket, for themselves or as a gift | Approve + buy from their wallet, optionally entering a friend's address | Payment goes into escrow; a ticket token is minted to the chosen wallet |
 | 4 | Guest opens the ticket on a phone | Wallet signs a device pass once; the phone signs `ticketId + time` every 10s for the QR | none |
 | 5 | **Door scans: VALID** (the aha moment) | Pass signed by `ownerOf(ticketId)`, device signature under 30s old, ticket unused | `checkIn` marks it used |
 | 6 | **Same QR or a screenshot: REFUSED** | Stale timestamp, or the ticket is used | `checkIn` reverts `AlreadyUsed` |
-| 7 | Resale at any price, or a free gift | List and buy, or gift to a friend's wallet | Old token burned, new one minted; the old QR dies with the old id |
+| 7 | Resale at any price | List, then someone buys it for themselves or a friend | Old token burned, new one minted; the old QR dies with the old id |
 
 ## Why it can't be faked or copied
 
 - **No copying:** tickets belong to wallets. A phone shows the QR only after the owner's wallet signs a pass for it, and the QR is re-signed every 10s, so a screenshot expires.
-- **Burn and re-mint:** every resale or gift burns the old token and mints a new one, so passes and QR codes made for the old id stop working.
+- **Burn and re-mint:** every resale burns the old token and mints a new one, so passes and QR codes made for the old id stop working.
+- **No free transfers:** a ticket only changes hands through a paid resale. Gifts are purchases with the friend's address as the recipient, so fees, royalties and wallet limits always apply.
 - **No double entry:** `checkIn` flips `used` on-chain. Two doors can't both admit the same ticket.
 - **No bulk buying:** organizers set a per-wallet limit per event, enforced on first sales and resales.
 - **No custody:** the contract never holds funds. Payments go from the buyer to each recipient in the same transaction.
@@ -49,7 +50,6 @@ through its ERC-20 precompile.
 | First sale (escrowed, paid from `startsAt + 24h`) | 3% | 97% | none |
 | Resale (seller sets any price) | 3% | royalty, 0 to 10%, chosen per event | the rest |
 | Cancelled event | nothing | can never withdraw | each holder claims 100% back from escrow |
-| Gift to a friend | nothing | nothing | nothing |
 
 - **Creating an event is free.** The storage deposit Portaldot charges for on-chain data already makes spam cost money, and a creation fee would discourage the organizers who bring volume.
 - **Cancelling** marks the event cancelled and blocks sales, resales and check-ins. On-chain data can't be deleted.
