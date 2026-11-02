@@ -1,14 +1,17 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, X } from 'lucide-react';
-import { Wordmark } from '@/components/Logo';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Mark } from '@/components/Logo';
 import { useLiveCode } from '@/components/landing/useLiveCode';
 import { getEvents, phase, type DoorEvent } from '@/lib/doorlist';
-import { price, shortAddress, when } from '@/lib/format';
+import { price, when, shortAddress } from '@/lib/format';
+import { DOORLIST, EXPLORER } from '@/lib/chain';
 import { MAX_AGE_SECONDS, REFRESH_SECONDS } from '@/lib/pass';
 import credits from '@/public/world/credits.json';
+import './landing.css';
+
+const v = (o: Record<string, string | number>) => o as CSSProperties;
 
 export default function Home() {
   const live = useLiveCode();
@@ -21,304 +24,84 @@ export default function Home() {
   useReveal();
 
   return (
-    <div className="page">
-      <header className="p-bar">
-        <Link href="/" className="wordmark">
-          <Wordmark />
+    <div className="lp">
+      <header className="lp-bar">
+        <Link href="/" className="wordmark" aria-label="Doorlist, home">
+          <Mark size={26} />
+          <span>Doorlist</span>
         </Link>
         <nav aria-label="Main">
-          <Link href="/events/">Events</Link>
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
           <Link href="/organize/">Organize</Link>
+          <Link href="/tickets/">My tickets</Link>
         </nav>
-        <Link className="btn btn-lime" href="/events/">
+        <Link className="door-btn door-btn-s" href="/events/">
           Find an event
         </Link>
       </header>
 
-      {/* HERO: controls on the sentence */}
-      <section className="hero wrap">
-        <h1 className="display lines hero-h">
-          <span className="line">
-            <span data-line style={{ ['--i' as string]: 0 }}>Tickets that</span>
-          </span>
-          <span className="line">
-            <span data-line style={{ ['--i' as string]: 1 }}>can’t be copied.</span>
-          </span>
-        </h1>
-
-        <div className="chip chip-a" data-ui aria-label="A live code, signed every 10 seconds">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          {live.code ? <img src={live.code.qr} alt="" width={44} height={44} /> : <span className="chip-qr" />}
-          <span>
-            <span className="chip-label">Live code</span>
-            <span className="chip-read num">new in {live.nextIn}s</span>
-          </span>
-        </div>
-        <button className="chip chip-b" data-ui aria-pressed={!!live.shot} onClick={live.shot ? live.clearShot : live.takeShot}>
-          <span>
-            <span className="chip-label">{live.shot ? 'Your screenshot' : 'Take a screenshot'}</span>
-            <span className="chip-read num">{live.shot ? `${live.shotAge}s old · ${live.shotRefused ? 'refused' : `refused in ${MAX_AGE_SECONDS - (live.shotAge ?? 0)}s`}` : 'try to copy it'}</span>
-          </span>
-          <span className={`switch${live.shot ? ' on' : ''}`} aria-hidden="true" />
-        </button>
-        <Link className="chip chip-c" data-ui href="/events/">
-          <span>
-            <span className="chip-label">On sale now</span>
-            <span className="chip-read num">{events ? `${events.length} event${events.length === 1 ? '' : 's'}` : '…'}</span>
-          </span>
-          <ArrowRight size={16} strokeWidth={1.5} aria-hidden="true" />
-        </Link>
-
-        <div className="hero-foot" data-rise style={{ ['--i' as string]: 0 }}>
-          <p className="hero-sub">Your ticket lives in your wallet and shows a code that changes every {REFRESH_SECONDS} seconds. Screenshots don’t work, and every ticket gets in once.</p>
-          <div className="hero-actions">
-            <Link className="btn btn-lime" href="/events/">
-              Find an event
-            </Link>
-            <Link className="link" href="/organize/">
-              Sell tickets for your event
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* SHOWCASE: live demo with controls */}
-      <section className="section wrap" aria-labelledby="demo-h">
-        <div className="show">
-          <div className="show-intro" data-reveal>
-            <h2 id="demo-h" className="h-sec">
-              Watch it refresh
-            </h2>
-            <p className="muted">This code was signed in your browser a moment ago, the same way a ticket is. Copy it, then wait.</p>
-          </div>
-          <div className="show-panel" data-ui data-reveal style={{ ['--i' as string]: 1 }}>
-            <div className="show-demo">
-              <div className="mini-ticket">
-                <span className="mini-name">Your ticket</span>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {live.code ? <img src={(live.shot ?? live.code).qr} alt="A live ticket code" /> : <span className="mini-qr" />}
-                <span className="mini-meta num">{live.shot ? `Screenshot, ${live.shotAge}s old` : `New code in ${live.nextIn}s`}</span>
-              </div>
-            </div>
-            <ul className="show-controls">
-              <li>
-                <span>Refreshes every</span>
-                <span className="num">{REFRESH_SECONDS} s</span>
-              </li>
-              <li>
-                <span>This code</span>
-                <span className="num">{live.code ? `${REFRESH_SECONDS - live.nextIn} s old` : '—'}</span>
-              </li>
-              <li>
-                <span>Signed by this phone</span>
-                <span className="id">{shortAddress(live.device)}</span>
-              </li>
-              <li>
-                <label htmlFor="shot">Use a screenshot</label>
-                <button id="shot" role="switch" aria-checked={!!live.shot} className={`switch${live.shot ? ' on' : ''}`} onClick={live.shot ? live.clearShot : live.takeShot}>
-                  <span className="sr-only">Use a screenshot</span>
-                </button>
-              </li>
-              <li>
-                <span>Screenshot age</span>
-                <span className="num">{live.shotAge !== undefined ? `${live.shotAge} s` : '—'}</span>
-              </li>
-              <li>
-                <span>At the door</span>
-                {live.shot ? (
-                  live.shotRefused ? (
-                    <span className="verdict-txt no">
-                      <X size={14} strokeWidth={2} aria-hidden="true" /> Refused, too old
-                    </span>
-                  ) : (
-                    <span className="verdict-txt num">Valid for {MAX_AGE_SECONDS - (live.shotAge ?? 0)} s more</span>
-                  )
-                ) : (
-                  <span className="verdict-txt ok">
-                    <Check size={14} strokeWidth={2} aria-hidden="true" /> Valid
-                  </span>
-                )}
-              </li>
-            </ul>
-            <Link className="show-link link" href="/events/">
-              See a real event
-            </Link>
-          </div>
-          <p className="faint show-hint" data-reveal style={{ ['--i' as string]: 2 }}>Turn the screenshot on, then wait {MAX_AGE_SECONDS} seconds.</p>
-        </div>
-      </section>
-
-      {/* HOW IT WORKS: pinned fragment, changing state */}
-      <HowItWorks next={events?.[0]} qr={live.code?.qr} nextIn={live.nextIn} />
-
-      <figure className="world wrap" data-reveal>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/world/box-office.jpg" alt="A crowd pressed against a wooden barrier at a theatre box office, watched by a guard" width={1600} height={1144} />
-        <figcaption className="faint">The door has always needed a guard. Félix Vallotton, Box Office, 1893.</figcaption>
-      </figure>
-
-      {/* FEATURES: paragraph with picture words */}
-      <section className="section wrap" aria-labelledby="feat-h">
-        <h2 id="feat-h" className="sr-only">
-          What Doorlist does with the money
-        </h2>
-        <div className="feat-grid">
-          <p className="statement feat" data-reveal>
-            Money waits <span className="slot" data-ui>Held</span> until the doors open. Cancel, and everyone gets <span className="slot" data-ui>100%</span> back. Every resale pays the organizer <span className="slot" data-ui>+5%</span>.
-          </p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <div className="feat-pic" data-reveal style={{ ['--i' as string]: 1 }}>
-            <img className="drift" src="/world/live-band-performance-at-an-outdoor-concert.jpg" alt="A band on an outdoor stage at night, the crowd in front" />
-          </div>
-        </div>
-      </section>
-
-      {/* PRICING: the price, very large */}
-      <section id="pricing" className="section wrap pricing" aria-labelledby="price-h">
-        <div className="price-copy" data-reveal>
-          <h2 id="price-h" className="h-sec">
-            One fee, after the sale
-          </h2>
-          <p className="muted">Organizers pay 3% of each ticket sold, taken when the money is paid out. Buyers pay the ticket price and a small network fee.</p>
-        </div>
-        <div className="price-fig" data-reveal style={{ ['--i' as string]: 1 }}>
-          <div className="price-num num" aria-label="3 percent">
-            3<span>%</span>
-          </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="price-obj" src="/world/theatre-box-office-sign-semaphore.jpg" alt="An old theatre price board: lounge 2/8d, upper dress circle 2/6d, children under 15 9d" />
-          <ul className="price-incl" data-reveal style={{ ['--i' as string]: 2 }}>
-            <li>Creating an event costs nothing</li>
-            <li>Paid to you 24 hours after doors open</li>
-            <li>Automatic refunds if you cancel</li>
-            <li>Up to 10% of every resale is yours</li>
-          </ul>
-          <Link className="btn btn-lime" href="/organize/">
-            Create an event
-          </Link>
-        </div>
-      </section>
-
-      {/* LIST: two-ended rows, live from the chain */}
-      <section className="section wrap onsale" aria-labelledby="list-h">
-        <div className="onsale-col" data-reveal>
-          <h2 id="list-h" className="h-list" data-reveal>
-            On sale now
-          </h2>
-          {!events ? (
-            <p className="faint">Reading Portaldot…</p>
-          ) : events.length === 0 ? (
-            <p className="muted">
-              Nothing on sale at this moment. Events appear here the second an organizer creates one.{' '}
-              <Link className="link" href="/organize/">
-                Be the first
-              </Link>
-            </p>
-          ) : (
-            <ul className="two-ends">
-              {events.slice(0, 12).map((e) => (
-                <li key={e.id}>
-                  <Link href={`/event/?id=${e.id}`}>
-                    <span className="dot" aria-hidden="true" />
-                    <span className="te-name">{e.name}</span>
-                    <span className="te-val num">
-                      {when(e.startsAt).day} · {price(e.price, e.currency)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link className="link" href="/events/" style={{ display: 'inline-block', marginTop: 24 }}>
-            All events
-          </Link>
-        </div>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="onsale-pic" data-reveal src="/world/beach-please-2022-crowd-stage-lights-night.jpg" alt="A festival crowd under stage lights, phones raised" />
-      </section>
-
+      <Hero live={live} onSale={events?.length} />
+      <Showcase live={live} />
+      <Stages />
+      <Board />
+      <Arcade />
+      <Pricing />
+      <Refused />
+      {events && events.length > 0 && <OnSale events={events} />}
       <Faq />
-
-      {/* CTA: first step, already open */}
       <Cta />
-
-      <footer className="wrap p-foot">
-        <p className="credits faint">
-          Pictures:{' '}
-          {credits.map((c, i) => (
-            <span key={c.file}>
-              <a className="link" href={c.page}>
-                “{c.title.length > 48 ? c.title.slice(0, 46) + '…' : c.title}”
-              </a>{' '}
-              by {c.creator}, {c.license}, via {c.via}
-              {i < credits.length - 1 ? '; ' : '.'}
-            </span>
-          ))}
-        </p>
-        <div className="foot-line">
-          <span className="faint">Doorlist, tickets on Portaldot</span>
-          <span className="foot-links">
-            <Link href="/events/">Events</Link>
-            <Link href="/organize/">Organize</Link>
-            <Link href="/door/">Door</Link>
-          </span>
-          <span className="faint" style={{ justifySelf: 'end' }}>
-            2026 · No cookies, no tracking
-          </span>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
 
-const STEPS = [
-  { title: 'Buy it with a tap.', line: 'Pay with dollars on Portaldot. The ticket lands in your wallet.' },
-  { title: 'Then show it from your phone.', line: 'Your wallet approves this phone once. The code changes every 10 seconds.' },
-  { title: 'Get scanned, once.', line: 'The door checks the code and records the entry. The second scan is refused.' },
-];
+type Live = ReturnType<typeof useLiveCode>;
 
-function HowItWorks({ next, qr, nextIn }: { next?: DoorEvent; qr?: string; nextIn: number }) {
-  const amount = next ? price(next.price, next.currency) : undefined;
-  const [active, setActive] = useState(0);
-  const refs = useRef<(HTMLDivElement | null)[]>([]);
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach((en) => en.isIntersecting && setActive(Number((en.target as HTMLElement).dataset.step))),
-      { rootMargin: '-45% 0px -45% 0px' },
-    );
-    refs.current.forEach((r) => r && io.observe(r));
-    return () => io.disconnect();
-  }, []);
+/* ------------------------------------------------------------------ hero: the giant doorway */
+function Hero({ live, onSale }: { live: Live; onSale?: number }) {
+  const video = usePlayWhenVisible();
   return (
-    <section id="how" className="section wrap how" aria-labelledby="how-h">
-      <div className="how-text">
-        <h2 id="how-h" className="h-sec">
-          Three steps, no paper
-        </h2>
-        {STEPS.map((s, i) => (
-          <div key={s.title} className={`how-step${active === i ? ' on' : ''}`} data-step={i} ref={(el) => void (refs.current[i] = el)}>
-            <p className="how-title">{s.title}</p>
-            <p className="muted">{s.line}</p>
-          </div>
-        ))}
+    <section className="hero" aria-labelledby="hero-h">
+      <div className="hero-copy">
+        <h1 id="hero-h" className="display lines">
+          <span className="line">
+            <span data-line style={v({ '--i': 0 })}>Tickets you</span>
+          </span>
+          <span className="line">
+            <span data-line style={v({ '--i': 1 })}>can’t copy</span>
+          </span>
+        </h1>
+        <p className="hero-sub" data-load style={v({ '--d': '420ms' })}>
+          Doorlist tickets live in your wallet and show a code that signs itself again every {REFRESH_SECONDS} seconds. The door lets each one in once.
+        </p>
+        <div className="hero-actions" data-load style={v({ '--d': '500ms' })}>
+          <Link className="door-btn" href="/events/">
+            Find an event
+          </Link>
+          <Link className="link" href="/organize/">
+            Sell tickets for your event
+          </Link>
+        </div>
+        <p className="hero-note" data-load style={v({ '--d': '580ms' })}>
+          {onSale === undefined ? 'Reading Portaldot…' : onSale === 0 ? 'Running on the Portaldot V3 testnet.' : `${onSale} event${onSale === 1 ? '' : 's'} on sale on Portaldot now.`}
+        </p>
       </div>
-      <div className="how-stage" aria-hidden="true">
-        <div className="frag" data-ui data-state={active}>
-          <div className="frag-buy">
-            <span className="kpi-label">Ticket</span>
-            <span className="frag-price num">{amount ?? next?.name ?? 'Your event'}</span>
-            <span className="frag-btn">{amount ? `Buy for ${amount}` : 'Buy'}</span>
-          </div>
-          <div className="frag-show">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {qr ? <img className="frag-qr" src={qr} alt="" /> : <span className="frag-qr" />}
-            <span className="faint num">New code in {nextIn}s</span>
-          </div>
-          <div className="frag-door">
-            <span className="frag-ok">Valid</span>
-            <span className="frag-again">Scan it again: refused, already used</span>
+
+      <div className="hero-door">
+        <div className="door-frame" data-open>
+          <video ref={video} muted loop playsInline preload="metadata" poster="/world/one-step-closer-live-in-philadelphia-poster.jpg" aria-hidden="true">
+            <source src="/world/one-step-closer-live-in-philadelphia.webm" type="video/webm" />
+          </video>
+          <span className="door-leaf" aria-hidden="true" />
+        </div>
+        <div className="hero-ticket" data-ui data-load style={v({ '--d': '900ms' })}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {live.code ? <img src={live.code.qr} alt="A live code signed in this browser" width={120} height={120} /> : <span className="qr-blank" />}
+          <div>
+            <p className="ht-name">Live code</p>
+            <p className="ht-sub">Signed in this browser</p>
+            <Ring left={live.nextIn} />
           </div>
         </div>
       </div>
@@ -326,95 +109,512 @@ function HowItWorks({ next, qr, nextIn }: { next?: DoorEvent; qr?: string; nextI
   );
 }
 
-const FAQ = [
-  { q: 'Do I need to know crypto?', a: 'No. You need a wallet app such as SubWallet or MetaMask. Doorlist only asks it to confirm things: a purchase, or approving your phone.' },
-  { q: 'What is dUSD?', a: 'Doorlist USD, a dollar token on the Portaldot network. Prices in dUSD read like dollars: $25.00 is 25 dUSD.' },
-  { q: 'What if I lose my phone?', a: 'Your ticket is in your wallet, not on the phone. Sign in on your new phone and approve it. The old phone’s codes stop working.' },
-  { q: 'What if the event is cancelled?', a: 'Your money was never paid out. Open My tickets and claim 100% back. You don’t need the organizer’s help.' },
-  { q: 'Can I sell my ticket?', a: 'Yes, at any price. The buyer gets a freshly issued ticket and your old code dies at the same moment.' },
-  { q: 'Can I buy one for a friend?', a: 'Yes. Choose As a gift and enter their wallet address. You pay, the ticket is issued straight to them.' },
+function Ring({ left }: { left: number }) {
+  const r = 15;
+  const c = 2 * Math.PI * r;
+  return (
+    <span className="ring">
+      <svg viewBox="0 0 36 36" width="36" height="36" aria-hidden="true">
+        <circle cx="18" cy="18" r={r} className="ring-bg" />
+        <circle cx="18" cy="18" r={r} className="ring-fg" style={{ strokeDasharray: c, strokeDashoffset: c * (1 - left / REFRESH_SECONDS) }} />
+      </svg>
+      <span className="num">New in {left} s</span>
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ showcase: one control, blown up */
+function Showcase({ live }: { live: Live }) {
+  const on = !!live.shot;
+  const age = live.shotAge ?? 0;
+  const refused = live.shotRefused;
+  const shown = live.shot ?? live.code;
+  return (
+    <section className={`show${refused ? ' is-no' : ''}`} aria-labelledby="show-h">
+      <div className="show-copy">
+        <h2 id="show-h" className="head" aria-live="polite">
+          The door says {refused ? 'no' : 'yes'}
+        </h2>
+        <p>
+          This code was signed in your browser a moment ago, the same way a ticket is. Freeze it like a screenshot, then wait {MAX_AGE_SECONDS} seconds.
+        </p>
+      </div>
+
+      <figure className="show-ticket" data-ui>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {shown ? <img src={shown.qr} alt={on ? 'The frozen code' : 'The live code'} width={260} height={260} /> : <span className="qr-blank" />}
+        <figcaption>
+          <span>{on ? `Frozen ${age} s ago` : `Live, new in ${live.nextIn} s`}</span>
+          <strong className="num">{!on ? 'Valid' : refused ? 'Refused, too old' : `Valid for ${MAX_AGE_SECONDS - age} s`}</strong>
+        </figcaption>
+      </figure>
+
+      <div className="show-control" data-ui>
+        <span className="sc-label" id="sc-label">
+          Screenshot
+        </span>
+        <button className="sc-track" role="switch" aria-checked={on} aria-labelledby="sc-label" onClick={on ? live.clearShot : live.takeShot}>
+          <span className="sc-knob" />
+        </button>
+        <span className="sc-value num">{!on ? 'Off, showing the live code' : refused ? `${age} s old, refused` : `${age} s old, refused in ${MAX_AGE_SECONDS - age} s`}</span>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ how it works: stages as one bar */
+const STAGES = [
+  { grow: 16, dur: 'Under a minute', line: 'First, pay in dollars from your wallet. The ticket is issued to you on Portaldot.' },
+  { grow: 16, dur: 'Ten seconds, once', line: 'Then your wallet approves this phone to show the code. No pop-ups after that.' },
+  { grow: 50, dur: 'Until the doors open', line: 'Meanwhile your money waits in the contract, not with the organizer, until a day after doors.' },
+  { grow: 16, dur: 'Two seconds', line: 'Finally the door scans the code, checks Portaldot and lets you in. Never twice.' },
 ];
 
-function Faq() {
-  const [sel, setSel] = useState(0);
+function Stages() {
   return (
-    <section className="section wrap faq" aria-labelledby="faq-h">
-      <ul className="faq-q" data-reveal>
-        <li>
-          <h2 id="faq-h" className="faq-h faint">
-            Questions
-          </h2>
-        </li>
-        {FAQ.map((f, i) => (
-          <li key={f.q}>
-            <button aria-expanded={sel === i} onClick={() => setSel(i)} onMouseEnter={() => setSel(i)} onFocus={() => setSel(i)}>
-              <span className="dot" aria-hidden="true" />
-              {f.q}
-            </button>
-            <p className="faq-inline">{f.a}</p>
+    <section id="how" className="stages wrap" aria-labelledby="how-h">
+      <h2 id="how-h" className="display" data-reveal>
+        From wallet to door
+      </h2>
+      <ol className="stage-bar" data-ui data-reveal>
+        {STAGES.map((s, i) => (
+          <li key={s.dur} style={v({ '--g': s.grow, '--i': i })}>
+            <span className={`stage-block sb-${i}`}>{s.dur}</span>
+            <p>{s.line}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ features: close-ups on a board */
+function Board() {
+  return (
+    <section className="board wrap" aria-labelledby="board-h" data-reveal>
+      <div className="tile t-head" style={v({ '--i': 0 })}>
+        <h2 id="board-h" className="head">
+          Rules nobody
+          <br /> can bend
+        </h2>
+      </div>
+
+      <div className="tile t-refund" style={v({ '--i': 1 })}>
+        <div className="zoom" data-ui aria-hidden="true">
+          <span className="z-fig num">100%</span>
+          <span className="z-btn">Claim refund</span>
+        </div>
+        <Cap name="Refunds without asking" line="If the organizer cancels, every holder takes the full price back." />
+      </div>
+
+      <div className="tile t-ring" style={v({ '--i': 2 })}>
+        <div className="zoom" data-ui aria-hidden="true">
+          <span className="z-ring">
+            <svg viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="15" className="ring-bg" />
+              <circle cx="18" cy="18" r="15" className="ring-fg" style={{ strokeDasharray: 94.25, strokeDashoffset: 28 }} />
+            </svg>
+            <span className="num">7</span>
+          </span>
+        </div>
+        <Cap name="Codes that expire" line={`New every ${REFRESH_SECONDS} s. Older than ${MAX_AGE_SECONDS} s is refused.`} />
+      </div>
+
+      <div className="tile t-verdict" style={v({ '--i': 3 })}>
+        <div className="zoom" data-ui aria-hidden="true">
+          <span className="z-verdict">Already used</span>
+          <span className="z-verdict-sub">Entered at the north door</span>
+        </div>
+        <Cap name="One scan per ticket" line="The door writes each entry to Portaldot. Scan the same ticket again and it is refused." />
+      </div>
+
+      <div className="tile t-royalty" style={v({ '--i': 4 })}>
+        <div className="zoom" data-ui aria-hidden="true">
+          <span className="z-slider">
+            <span className="z-fill" />
+            <span className="z-thumb" />
+          </span>
+          <span className="z-val num">5%</span>
+        </div>
+        <Cap name="Your cut of resales" line="Organizers set 0 to 10% of every resale." />
+      </div>
+
+      <div className="tile t-reissue" style={v({ '--i': 5 })}>
+        <div className="zoom" data-ui aria-hidden="true">
+          <span className="z-old num">#1043</span>
+          <span className="z-new num">#1187</span>
+        </div>
+        <Cap name="Resold, then reissued" line="The buyer gets a new ticket. The seller’s code dies with the old one." />
+      </div>
+
+      <div className="tile t-limit" style={v({ '--i': 6 })}>
+        <div className="zoom" data-ui aria-hidden="true">
+          <span className="z-step">−</span>
+          <span className="z-count num">4</span>
+          <span className="z-step">+</span>
+        </div>
+        <Cap name="A limit per wallet" line="One buyer can’t take the room." />
+      </div>
+
+      <div className="tile t-gift" style={v({ '--i': 7 })}>
+        <div className="zoom" data-ui aria-hidden="true">
+          <span className="z-seg">
+            <span>For me</span>
+            <span className="on">As a gift</span>
+          </span>
+          <span className="z-field num">0x8f3c…c21a</span>
+        </div>
+        <Cap name="Buy one for a friend" line="You pay, and the ticket is issued straight to their wallet." />
+      </div>
+
+      <div className="tile t-payout" style={v({ '--i': 8 })}>
+        <div className="zoom" data-ui aria-hidden="true">
+          <span className="z-held">Held</span>
+        </div>
+        <Cap name="Paid after the show" line="Ticket money waits until 24 hours after doors open." />
+      </div>
+    </section>
+  );
+}
+
+function Cap({ name, line }: { name: string; line: string }) {
+  return (
+    <div className="cap">
+      <h3>{name}</h3>
+      <p>{line}</p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ the band: every picture through a doorway */
+const ARCHES = [
+  { src: '/world/a-small-queue-at-the-entrance-to.jpg', w: 1750, h: 2250, pos: '42% 58%', alt: 'A long queue of top hats outside the arches of a Paris exhibition hall, a guard pointing down the line', cap: '“But I have a special pass!” A queue at the Palais de l’Industrie, Daumier, 1844.' },
+  { src: '/world/box-office.jpg', w: 1600, h: 1144, pos: '72% 45%', alt: 'A crowd pressed against the barrier of a theatre box office, a guard standing in front', cap: 'The box office crush, Vallotton, 1893.' },
+  { src: '/world/theatre-box-office-sign-semaphore.jpg', w: 1536, h: 2048, pos: '50% 45%', alt: 'An old theatre price board: lounge 2/8d, upper dress circle 2/6d, children under 15 9d', cap: 'A theatre price board, every seat by the slat.' },
+  { src: '/world/live-band-performance-at-an-outdoor-concert.jpg', w: 1920, h: 1277, pos: '45% 40%', alt: 'A band on an outdoor stage at night, lit from behind, the crowd in front', cap: 'An outdoor show at night, 2025.' },
+  { src: '/world/beach-please-2022-crowd-stage-lights-night.jpg', w: 1920, h: 1282, pos: '55% 50%', alt: 'A festival crowd under white and violet stage lights, phones raised', cap: 'A festival crowd, Beach, Please! 2022.' },
+];
+
+function Arcade() {
+  return (
+    <section className="arcade wrap" aria-labelledby="arcade-h">
+      <div className="arcade-head" data-reveal>
+        <h2 id="arcade-h" className="head">
+          Every door keeps a list
+        </h2>
+        <p>
+          For as long as there have been shows, someone has stood at the door with a list, crossing names off. Doorlist keeps that list on Portaldot, where nobody can
+          forge a line or cross one off twice.
+        </p>
+      </div>
+      <ul className="arches" data-reveal>
+        {ARCHES.map((a, i) => (
+          <li key={a.src}>
+            <figure>
+              <div className="arch shutter" style={v({ '--i': i })}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={a.src} alt={a.alt} width={a.w} height={a.h} loading="lazy" decoding="async" style={{ objectPosition: a.pos }} />
+              </div>
+              <figcaption>{a.cap}</figcaption>
+            </figure>
           </li>
         ))}
       </ul>
-      <p className="faq-a" aria-live="polite" key={sel}>
-        {FAQ[sel].a}
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ pricing: tiles that step up with the fee */
+const PLANS = [
+  {
+    name: 'Create an event',
+    fee: '0%',
+    lines: ['No Doorlist fee to list', 'The network holds a storage deposit in POT', 'Price in dollars or in POT'],
+    cta: 'Create an event',
+    href: '/organize/',
+  },
+  {
+    name: 'Sell a ticket',
+    fee: '3%',
+    lines: ['3% of each ticket, taken at payout', 'Paid to you 24 hours after doors open', 'Cancel before then and every buyer is refunded', 'Buyers pay the price plus a small network fee'],
+    cta: 'Start selling',
+    href: '/organize/',
+  },
+  {
+    name: 'Resell a ticket',
+    fee: '3–13%',
+    lines: ['3% to Doorlist', '0 to 10% to the organizer, set per event', 'The rest to the seller, the moment it sells', 'The buyer gets a freshly issued ticket', 'The old code stops working'],
+    cta: 'See what’s on',
+    href: '/events/',
+  },
+];
+
+function Pricing() {
+  return (
+    <section id="pricing" className="pricing wrap" aria-labelledby="price-h">
+      <h2 id="price-h" className="head" data-reveal>
+        Who pays what
+      </h2>
+      <ul className="plans" data-reveal>
+        {PLANS.map((p, i) => (
+          <li key={p.name} className={`plan plan-${i}`} style={v({ '--i': i })}>
+            <h3>{p.name}</h3>
+            <p className="plan-fee num">{p.fee}</p>
+            <ul className="plan-lines">
+              {p.lines.map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+            <Link className="plan-go" href={p.href}>
+              {p.cta}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ list: what the door crosses off */
+const REFUSED = [
+  { what: 'screenshots', why: `older than ${MAX_AGE_SECONDS} s` },
+  { what: 'second scans', why: 'already used' },
+  { what: 'forged codes', why: 'wrong signature' },
+  { what: 'old phones', why: 'replaced by your new one' },
+  { what: 'resold copies', why: 'reissued to the buyer' },
+];
+
+function Refused() {
+  return (
+    <section className="refused" aria-labelledby="refused-h">
+      <div className="wrap">
+        <h2 id="refused-h" className="head" data-reveal>
+          Refused at the door
+        </h2>
+        <ul className="poster">
+          {REFUSED.map((r, i) => (
+            <li key={r.what} data-reveal style={v({ '--i': i })}>
+              <span className="poster-what">{r.what}</span>
+              <span className="poster-why num">{r.why}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ live events, only when there are some */
+function OnSale({ events }: { events: DoorEvent[] }) {
+  return (
+    <section className="onsale wrap" aria-labelledby="onsale-h">
+      <h2 id="onsale-h" className="head" data-reveal>
+        On sale now
+      </h2>
+      <ul className="onsale-list" data-reveal>
+        {events.slice(0, 8).map((e) => (
+          <li key={e.id}>
+            <Link href={`/event/?id=${e.id}`}>
+              <span className="bullet" aria-hidden="true" />
+              <span className="os-name">{e.name}</span>
+              <span className="os-val num">
+                {when(e.startsAt).day}, {price(e.price, e.currency)}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Link className="link" href="/events/">
+        All events
+      </Link>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ faq: filled tiles */
+const FAQ = [
+  { q: 'Do I need to know crypto?', a: 'No. You need a wallet app such as SubWallet or MetaMask. Doorlist only asks it to confirm two things: a purchase, and approving your phone.' },
+  { q: 'What is dUSD?', a: 'Doorlist USD, a dollar token on the Portaldot network. A price of $25.00 is 25 dUSD.' },
+  { q: 'What does buying cost me?', a: 'The ticket price, plus a small network fee in POT. Doorlist takes nothing from buyers.' },
+  { q: 'What if I lose my phone?', a: 'Your ticket is in your wallet, not on the phone. Sign in on the new phone and approve it; the old phone’s codes stop working.' },
+  { q: 'What if the event is cancelled?', a: 'The money was never paid out. Open My tickets and claim 100% back. You don’t need the organizer’s help.' },
+  { q: 'Can I sell my ticket?', a: 'Yes, at the price you choose, through Doorlist. The buyer gets a freshly issued ticket and your code dies at the same moment.' },
+  { q: 'Can I buy one for a friend?', a: 'Yes. Choose As a gift and paste their wallet address. You pay, and the ticket is issued straight to them.' },
+  { q: 'What does the door need?', a: 'Any phone with a camera. The organizer approves it as a door once; after that it checks codes against Portaldot with no pop-ups.' },
+];
+
+function Faq() {
+  return (
+    <section className="faq wrap" aria-labelledby="faq-h">
+      <h2 id="faq-h" className="head" data-reveal>
+        Before you buy
+      </h2>
+      <div className="faq-list" data-reveal>
+        {FAQ.map((f, i) => (
+          <details key={f.q} name="faq" open={i === 0} style={v({ '--i': i })}>
+            <summary>
+              <span>{f.q}</span>
+              <span className="plus" aria-hidden="true" />
+            </summary>
+            <div className="faq-a">
+              <p>{f.a}</p>
+            </div>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ cta: the sentence with a blank */
+function Cta() {
+  const router = useRouter();
+  const [name, setName] = useState('');
+  return (
+    <section className="cta wrap" aria-labelledby="cta-h">
+      <form
+        onSubmit={(x) => {
+          x.preventDefault();
+          router.push(`/organize/${name.trim() ? `?name=${encodeURIComponent(name.trim())}` : ''}`);
+        }}
+      >
+        <h2 id="cta-h" className="display" data-reveal>
+          Sell tickets for
+        </h2>
+        <div className="cta-line" data-reveal style={v({ '--i': 1 })}>
+          <label className="sr-only" htmlFor="cta-name">
+            Your event’s name
+          </label>
+          <input id="cta-name" value={name} maxLength={48} placeholder="your event" onChange={(x) => setName(x.target.value)} autoComplete="off" />
+          <button type="submit" className="cta-go">
+            Start
+          </button>
+        </div>
+      </form>
+      <p className="cta-note" data-reveal style={v({ '--i': 2 })}>
+        Opens the organizer screen with the name filled in. Listing an event has no Doorlist fee.
       </p>
     </section>
   );
 }
 
-function Cta() {
-  const router = useRouter();
-  const [name, setName] = useState('Portaldot Hacker House Demo Day');
-  const [cur, setCur] = useState<'dUSD' | 'POT'>('dUSD');
+/* ------------------------------------------------------------------ footer: the name, built as doorways */
+const LETTERS = [
+  { l: 'D', h: 82 },
+  { l: 'o', h: 64 },
+  { l: 'o', h: 92 },
+  { l: 'r', h: 70 },
+  { l: 'l', h: 100 },
+  { l: 'i', h: 60 },
+  { l: 's', h: 86 },
+  { l: 't', h: 74 },
+];
+
+function Footer() {
   return (
-    <section className="cta" aria-labelledby="cta-h">
-      <div className="cta-copy">
-        <h2 id="cta-h" className="cta-h">
-          Open your doors.
-        </h2>
-        <p>Name it, add a date and a picture, and it’s on sale in minutes. You’re paid the day after.</p>
+    <footer className="foot wrap" aria-labelledby="foot-h">
+      <h2 id="foot-h" className="sr-only">
+        Doorlist
+      </h2>
+      <div className="foot-mark" aria-hidden="true" data-reveal>
+        {LETTERS.map((x, i) => (
+          <span key={i} className={`fm fm-${i % 2}`} style={v({ '--h': `${x.h}%`, '--i': i })}>
+            {x.l}
+          </span>
+        ))}
       </div>
-      <form
-        className="dialog"
-        data-ui
-        onSubmit={(x) => {
-          x.preventDefault();
-          router.push(`/organize/?name=${encodeURIComponent(name)}&currency=${cur}`);
-        }}
-      >
-        <p className="dialog-t">Name your event</p>
-        <label className="sr-only" htmlFor="cta-name">
-          Event name
-        </label>
-        <input id="cta-name" className="dialog-in" value={name} maxLength={48} onChange={(x) => setName(x.target.value)} />
-        <div className="dialog-seg" role="group" aria-label="Price tickets in">
-          {(['dUSD', 'POT'] as const).map((c) => (
-            <button type="button" key={c} aria-pressed={cur === c} onClick={() => setCur(c)}>
-              {c === 'dUSD' ? 'Dollars (dUSD)' : 'POT'}
-            </button>
-          ))}
+      <div className="foot-cols">
+        <div>
+          <h3>Use it</h3>
+          <Link href="/events/">Events</Link>
+          <Link href="/tickets/">My tickets</Link>
+          <Link href="/organize/">Organize</Link>
+          <Link href="/door/">Door</Link>
         </div>
-        <button className="dialog-go">Continue</button>
-      </form>
-    </section>
+        <div>
+          <h3>Learn</h3>
+          <a href="#how">How it works</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#faq-h">Questions</a>
+        </div>
+        <div>
+          <h3>On Portaldot</h3>
+          <a href={EXPLORER}>Network explorer</a>
+          <span className="num" title={DOORLIST}>
+            Contract {shortAddress(DOORLIST)}
+          </span>
+          <span>dUSD, asset 2026</span>
+        </div>
+        <div className="foot-about">
+          <p>Doorlist was built for the Portaldot Hacker House 2026 and runs on the Portaldot V3 testnet.</p>
+          <p>No cookies, no tracking.</p>
+        </div>
+      </div>
+      <p className="credits">
+        Pictures and footage:{' '}
+        {credits.map((c, i) => (
+          <span key={c.file}>
+            <a className="link" href={c.page}>
+              {c.title.length > 44 ? c.title.slice(0, 42).trim() + '…' : c.title}
+            </a>{' '}
+            by {c.creator}, {c.license}, via {c.via}
+            {i < credits.length - 1 ? '; ' : '.'}
+          </span>
+        ))}
+      </p>
+      <div className="foot-last">
+        <span>© 2026 Doorlist</span>
+        <Link className="door-btn door-btn-s" href="/events/">
+          Find an event
+        </Link>
+      </div>
+    </footer>
   );
 }
 
-/** Section entrances: adds .is-in once each [data-reveal] scrolls into view. */
+/* ------------------------------------------------------------------ behaviour */
+
+/** Section entrances: adds .is-in once to each [data-reveal] when its top passes 88% of the screen,
+ *  including anything already scrolled past (a jump from a link lands below it). */
 function useReveal() {
   useEffect(() => {
-    const els = document.querySelectorAll('[data-reveal]');
-    const io = new IntersectionObserver(
-      (entries) =>
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add('is-in');
-            io.unobserve(e.target);
-          }
-        }),
-      { rootMargin: '0px 0px -10% 0px' },
-    );
-    els.forEach((el) => io.observe(el));
+    let left = [...document.querySelectorAll<HTMLElement>('[data-reveal]')];
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      const line = window.innerHeight * 0.88;
+      left = left.filter((el) => {
+        if (el.getBoundingClientRect().top < line) {
+          el.classList.add('is-in');
+          return false;
+        }
+        return true;
+      });
+      if (!left.length) window.removeEventListener('scroll', onScroll);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+}
+
+/** The hero clip plays only while it is on screen, and never under reduced motion. */
+function usePlayWhenVisible() {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const io = new IntersectionObserver(([e]) => (e.isIntersecting ? el.play().catch(() => {}) : el.pause()));
+    io.observe(el);
     return () => io.disconnect();
   }, []);
+  return ref;
 }

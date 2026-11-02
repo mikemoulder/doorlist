@@ -88,5 +88,53 @@
   "credit": "\"Theatre box office sign Semaphore\" by AlphaLemur, CC BY 4.0, via Wikimedia Commons",
   "notes": [],
   "saved": "2026-11-02T13:13:34.675Z"
+ },
+ {
+  "file": "web/public/world/a-small-queue-at-the-entrance-to.jpg",
+  "media": "image",
+  "ref": "aic:61113",
+  "title": "A Small Queue at the Entrance to the Palace of Industry. “- But I am telling you that I have a special entry permit! - Quite so, and this is why you are allowed to queue up already at the Obelisk.... otherwise you would have to start on the other side, close to the Etoile.... incidentally why not have a bite to eat while you are waiting... there is a charming little restaurant half way, plate 7 from Les Etrangers à Paris",
+  "creator": "Honoré-Victorin Daumier",
+  "creatorUrl": null,
+  "date": "1844",
+  "license": "public domain (CC0)",
+  "licenseCode": "cc0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "creditRequired": false,
+  "page": "https://www.artic.edu/artworks/61113",
+  "via": "Art Institute of Chicago",
+  "image": "https://www.artic.edu/iiif/2/958da0ef-acbd-b830-7628-eb188f80004a/full/1750,/0/default.jpg",
+  "width": 1750,
+  "height": 2250,
+  "bytes": 1199459,
+  "credit": "\"A Small Queue at the Entrance to the Palace of Industry. “- But I am telling you that I h…\" by Honoré-Victorin Daumier, 1844, public domain (CC0), via Art Institute of Chicago",
+  "notes": [],
+  "saved": "2026-11-02T14:13:53.490Z"
+ },
+ {
+  "file": "web/public/world/one-step-closer-live-in-philadelphia.webm",
+  "media": "video",
+  "poster": "web/public/world/one-step-closer-live-in-philadelphia-poster.jpg",
+  "ref": "commons:195153137",
+  "title": "One-Step-Closer-Live-in-Philadelphia",
+  "creator": "Tyler Savitski",
+  "creatorUrl": null,
+  "date": "2024-03-26",
+  "license": "CC BY-SA 4.0",
+  "licenseCode": "by-sa",
+  "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+  "creditRequired": true,
+  "page": "https://commons.wikimedia.org/wiki/File:One-Step-Closer-Live-in-Philadelphia.webm",
+  "via": "Wikimedia Commons",
+  "video": "https://upload.wikimedia.org/wikipedia/commons/transcoded/5/53/One-Step-Closer-Live-in-Philadelphia.webm/One-Step-Closer-Live-in-Philadelphia.webm.480p.vp9.webm",
+  "width": 854,
+  "height": 480,
+  "duration": 27.4,
+  "bytes": 5460166,
+  "credit": "\"One-Step-Closer-Live-in-Philadelphia\" by Tyler Savitski, CC BY-SA 4.0, via Wikimedia Commons",
+  "notes": [
+   "Share-alike: an altered version (recoloured, combined with other pictures) must be shared under the same licence."
+  ],
+  "saved": "2026-11-02T14:13:58.370Z"
  }
 ]
