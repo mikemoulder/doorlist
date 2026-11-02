@@ -7,7 +7,7 @@ module.exports = {
   solidity: {
     version: '0.8.24',
     // Small bytecode matters more than cheap calls: Revive charges a storage deposit per byte of code.
-    settings: { optimizer: { enabled: true, runs: 1 }, evmVersion: 'cancun' },
+    settings: { optimizer: { enabled: true, runs: 1 }, viaIR: true, evmVersion: 'cancun' },
   },
   networks: {
     portaldot: {
