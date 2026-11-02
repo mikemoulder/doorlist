@@ -23,6 +23,8 @@ const usd = new ethers.Contract(DUSD, [
 ], wallet);
 
 const fmt = (x) => ethers.formatUnits(x, 6);
+// Legacy type with the node's exact gas price: an EIP-1559 max fee of 2x asks for more balance than exists.
+const legacy = async () => ({ type: 0, gasPrice: BigInt(await provider.send('eth_gasPrice', [])) });
 async function step(label, send) {
   const before = await provider.getBalance(wallet.address);
   const tx = await send();
@@ -38,23 +40,23 @@ console.log(`wallet ${wallet.address}, ${ethers.formatEther(await provider.getBa
 await balances('start');
 
 if ((await usd.allowance(wallet.address, d.address)) < PRICE) {
-  await step('approve Doorlist on the precompile', () => usd.approve(d.address, ethers.MaxUint256));
+  await step('approve Doorlist on the precompile', async () => usd.approve(d.address, ethers.MaxUint256, await legacy()));
 }
 const startsAt = Math.floor(Date.now() / 1000) + 2 * 24 * 3600;
-const created = await step('createEvent (priced in dUSD)', () =>
-  dl.createEvent('Stablecoin check', startsAt, 10, PRICE, DUSD, 0, 500, MEDIA));
+const created = await step('createEvent (priced in dUSD)', async () =>
+  dl.createEvent('Stablecoin check', startsAt, 10, PRICE, DUSD, 0, 500, MEDIA, await legacy()));
 const eventId = dl.interface.parseLog(created.logs.find((l) => l.address.toLowerCase() === d.address.toLowerCase())).args.eventId;
 console.log(`  event #${eventId}`);
 
-const bought = await step('buy (transferFrom into escrow)', () => dl.buy(eventId, wallet.address));
+const bought = await step('buy (transferFrom into escrow)', async () => dl.buy(eventId, wallet.address, await legacy()));
 const ticketId = bought.logs
   .map((l) => { try { return dl.interface.parseLog(l); } catch { return null; } })
   .find((e) => e?.name === 'Transfer').args.tokenId;
 console.log(`  ticket #${ticketId}, owner ${await dl.ownerOf(ticketId)}, escrowed ${fmt((await dl.events(eventId)).escrowed)} dUSD`);
 await balances('after buy');
 
-await step('cancelEvent', () => dl.cancelEvent(eventId));
-await step('claimRefund (transfer out of escrow)', () => dl.claimRefund(ticketId));
+await step('cancelEvent', async () => dl.cancelEvent(eventId, await legacy()));
+await step('claimRefund (transfer out of escrow)', async () => dl.claimRefund(ticketId, await legacy()));
 console.log(`  escrowed ${fmt((await dl.events(eventId)).escrowed)} dUSD, refunded flag ${(await dl.tickets(ticketId)).refunded}`);
 await balances('after refund');
 console.log(`wallet left ${ethers.formatEther(await provider.getBalance(wallet.address))} tPOT`);
