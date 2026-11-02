@@ -54,6 +54,20 @@ through its ERC-20 precompile.
 - **Creating an event is free.** The storage deposit Portaldot charges for on-chain data already makes spam cost money, and a creation fee would discourage the organizers who bring volume.
 - **Cancelling** marks the event cancelled and blocks sales, resales and check-ins. On-chain data can't be deleted.
 
+## Event media (pictures and ticket designs)
+
+Stored on Portaldot itself, in the runtime's `transactionStorage` pallet, not on IPFS or a server.
+
+- The organizer's app bundles the event picture, ticket design and details into one file and
+  submits `transactionStorage.store` (up to 8 MB per transaction, a fee of 10 planck per byte).
+- The contract publishes the location (`tstore:<block>:<index>:<blake2-256>`) in a `UriSet` log.
+  The app reads the latest one with `eth_getLogs`, fetches the block from the node, and checks
+  the hash.
+- **Data expires after 100,800 blocks (about 7 days)** unless renewed. Each `renew` moves it to a
+  new block, so the organizer calls `setUri` with the new location. The dashboard does both.
+- Verified on 2026-11-02: a 50 KB file stored in about 8 seconds at block 291334 and read back
+  byte-identical from the public node (`scripts/tstore.mjs`).
+
 ## Decisions
 
 | Decision | Why | Instead of |
@@ -64,6 +78,8 @@ through its ERC-20 precompile.
 | Each event names its currency | One contract serves tPOT and any native asset | Hardcoding one token |
 | Static frontend over the EVM HTTP RPC | No server to host or break; HTTP is unaffected by the WebSocket drops seen on the Substrate endpoint | Next.js API routes or a database |
 | Ticket list from `eth_getLogs` | Verified that the RPC serves logs | An indexer |
+| Media pointer in a log (`UriSet`), not contract storage | A stored string added 905 bytes of code (about 48 tPOT to deploy) and a storage deposit on every event | A `uri` field in the event struct |
+| Media in `transactionStorage` | Portaldot-native, no server, almost free per byte | IPFS with a pinning service (permanent, but needs an API key and a server function) |
 
 ## Repo map
 

@@ -62,6 +62,10 @@ contract Doorlist {
 
     event Transfer(address indexed from, address indexed to, uint256 indexed tokenId); // ERC-721 shape
     event EventCreated(uint256 indexed eventId, address indexed organizer, string name);
+    /// @dev The event's media bundle (picture, ticket design, details), e.g.
+    /// "tstore:<block>:<index>:<hash>" in Portaldot's transactionStorage. Kept in logs, not
+    /// storage: the latest UriSet for an event is its current media.
+    event UriSet(uint256 indexed eventId, string uri);
     event DoorSet(uint256 indexed eventId, address indexed door, bool allowed);
     event Listed(uint256 indexed ticketId, uint128 price);
     event Reminted(uint256 indexed oldId, uint256 indexed newId, uint128 price);
@@ -96,12 +100,21 @@ contract Doorlist {
         uint128 price,
         address currency,
         uint32 maxPerWallet,
-        uint16 royaltyBps
+        uint16 royaltyBps,
+        string calldata uri
     ) external returns (uint256 eventId) {
         if (royaltyBps > MAX_ROYALTY_BPS) revert RoyaltyTooHigh();
         eventId = events.length;
         events.push(Event(msg.sender, startsAt, capacity, 0, maxPerWallet, royaltyBps, false, price, 0, currency, name));
         emit EventCreated(eventId, msg.sender, name);
+        emit UriSet(eventId, uri);
+    }
+
+    /// @notice Point the event at new media, e.g. after renewing it in Portaldot's
+    /// transactionStorage (which moves the data to a new block) or replacing the picture.
+    function setUri(uint256 eventId, string calldata uri) external {
+        if (events[eventId].organizer != msg.sender) revert NotOrganizer();
+        emit UriSet(eventId, uri);
     }
 
     function setDoor(uint256 eventId, address door, bool allowed) external {

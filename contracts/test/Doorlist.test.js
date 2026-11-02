@@ -17,11 +17,14 @@ describe('Doorlist', () => {
     await ethers.provider.send('evm_mine', []);
   };
 
-  // createEvent(name, startsAt, capacity, price, currency, maxPerWallet, royaltyBps)
+  // A real location from the testnet: a 50 KB file stored with scripts/tstore.mjs on 2026-11-02.
+  const URI = 'tstore:291334:1:0x582196170e8d0e01962f18509e8579a80b821cf6d1e7abfac11cba975f443f03';
+
+  // createEvent(name, startsAt, capacity, price, currency, maxPerWallet, royaltyBps, uri)
   const create = (opts = {}) =>
     dl.connect(organizer).createEvent(
       opts.name ?? 'Demo Day', opts.startsAt ?? startsAt, opts.capacity ?? 10, opts.price ?? PRICE,
-      ZERO, opts.maxPerWallet ?? 0, opts.royaltyBps ?? 500,
+      ZERO, opts.maxPerWallet ?? 0, opts.royaltyBps ?? 500, opts.uri ?? URI,
     );
 
   beforeEach(async () => {
@@ -46,6 +49,18 @@ describe('Doorlist', () => {
       await expect(dl.connect(alice).buy(1, alice.address, { value: 1n })).to.be.revertedWithCustomError(dl, 'WrongPayment');
       await dl.connect(alice).buy(1, alice.address, { value: PRICE });
       await expect(dl.connect(bob).buy(1, bob.address, { value: PRICE })).to.be.revertedWithCustomError(dl, 'SoldOut');
+    });
+
+    it('publishes the media uri in logs; only the organizer can change it', async () => {
+      const latestUri = async (id) => {
+        const logs = await dl.queryFilter(dl.filters.UriSet(id));
+        return logs.at(-1).args.uri;
+      };
+      expect(await latestUri(0)).to.equal(URI);
+      const renewed = 'tstore:391000:2:0x582196170e8d0e01962f18509e8579a80b821cf6d1e7abfac11cba975f443f03';
+      await expect(dl.connect(alice).setUri(0, renewed)).to.be.revertedWithCustomError(dl, 'NotOrganizer');
+      await expect(dl.connect(organizer).setUri(0, renewed)).to.emit(dl, 'UriSet').withArgs(0n, renewed);
+      expect(await latestUri(0)).to.equal(renewed);
     });
 
     it('rejects a royalty above 10%', async () => {
