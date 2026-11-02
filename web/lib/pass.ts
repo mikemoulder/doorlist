@@ -30,6 +30,22 @@ export function encodeCode(ticketId: number, ts: number, device: Address, passSi
   return ['DL1', ticketId, ts, device, passSig, codeSig].join('.');
 }
 
+/**
+ * Who approved this phone, as the 0x address contracts see. Ethereum-style wallets sign 65 bytes (recovered
+ * with ecrecover). The Portaldot Wallet signs 64 bytes with the account's sr25519/ed25519 key: the door
+ * looks up the owner's 5... account on-chain (revive.originalAccount) and verifies the signature against it.
+ */
+async function passApprover(message: string, sig: Hex, owner: Address): Promise<Address | null> {
+  if (sig.length === 2 + 65 * 2) return recoverMessageAddress({ message, signature: sig }).catch(() => null);
+  if (sig.length !== 2 + 64 * 2) return null;
+  const [{ substrateApi }, { signatureVerify, cryptoWaitReady }] = await Promise.all([import('./substrate'), import('@polkadot/util-crypto')]);
+  const api = await substrateApi();
+  const original = (await api.query.revive.originalAccount(owner)) as unknown as { isSome: boolean; unwrap: () => { toString: () => string } };
+  if (!original.isSome) return null;
+  await cryptoWaitReady();
+  return signatureVerify(message, sig, original.unwrap().toString()).isValid ? owner : null;
+}
+
 export type Verdict =
   | { ok: true; ticketId: number; eventId: number; holder: Address; age: number }
   | { ok: false; reason: string; ticketId?: number };
@@ -47,13 +63,11 @@ export async function verifyCode(raw: string, eventId: number, now = Math.floor(
   if (age < -MAX_AGE_SECONDS) return { ok: false, ticketId, reason: 'The phone’s clock is wrong. Ask the guest to set the time automatically.' };
   const signer = await recoverMessageAddress({ message: codeMessage(ticketId, ts), signature: codeSig as Hex }).catch(() => null);
   if (!signer || signer.toLowerCase() !== device.toLowerCase()) return { ok: false, ticketId, reason: 'The code was not signed by the phone it names.' };
-  const [ticket, passer] = await Promise.all([
-    getTicket(ticketId).catch(() => null),
-    recoverMessageAddress({ message: passMessage(ticketId, device as Address), signature: passSig as Hex }).catch(() => null),
-  ]);
+  const ticket = await getTicket(ticketId).catch(() => null);
   if (!ticket) return { ok: false, ticketId, reason: `Ticket #${ticketId} does not exist.` };
   if (ticket.eventId !== eventId) return { ok: false, ticketId, reason: `Ticket #${ticketId} is for a different event.` };
   if (ticket.owner === '0x0000000000000000000000000000000000000000') return { ok: false, ticketId, reason: `Ticket #${ticketId} was resold. The new owner has a new number.` };
+  const passer = await passApprover(passMessage(ticketId, device as Address), passSig as Hex, ticket.owner).catch(() => null);
   if (!passer || passer.toLowerCase() !== ticket.owner.toLowerCase()) return { ok: false, ticketId, reason: 'This phone was not approved by the ticket’s owner.' };
   if (ticket.used) return { ok: false, ticketId, reason: `Ticket #${ticketId} has already been scanned.` };
   const event = await getEvent(eventId);
