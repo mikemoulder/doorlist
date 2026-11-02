@@ -48,3 +48,10 @@ hack.md
 contracts/artifacts/
 contracts/cache/
 contracts/node_modules/
+
+# design skill working files (screenshots, direction sheets)
+.taste-skill/
+# web build output
+web/.next/
+web/out/
+web/node_modules/

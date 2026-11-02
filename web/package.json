@@ -1,0 +1,35 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "sync": "node -e \"const d=require('../deployments/portaldot-testnet.json');require('fs').writeFileSync('lib/deployment.json',JSON.stringify({chainId:d.chainId,rpc:d.rpc,address:d.address,treasury:d.treasury,block:d.block,abi:d.abi},null,1))\""
+  },
+  "dependencies": {
+    "@polkadot/api": "^16.5.6",
+    "@polkadot/extension-dapp": "^0.64.1",
+    "@polkadot/util": "^14.0.3",
+    "@polkadot/util-crypto": "^14.0.3",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^1.66.0",
+    "next": "15.5.4",
+    "qrcode": "^1.5.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "viem": "^2.57.14"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.4",
+    "typescript": "^5"
+  }
+}
