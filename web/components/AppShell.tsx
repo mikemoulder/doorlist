@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 export function Account() {
-  const { address, wallets, connect, disconnect, connecting } = useWallet();
+  const { address, connect, disconnect, connecting } = useWallet();
   if (address)
     return (
       <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
@@ -65,8 +65,8 @@ export function Account() {
       </span>
     );
   return (
-    <button className="pill pill-primary" onClick={() => connect()} disabled={connecting || wallets.length === 0} title={wallets.length ? undefined : 'Install a wallet such as SubWallet or MetaMask'}>
-      <Wallet size={15} strokeWidth={1.5} aria-hidden="true" /> {connecting ? 'Opening wallet…' : wallets.length ? 'Sign in' : 'No wallet found'}
+    <button className="pill pill-primary" onClick={() => connect()} disabled={connecting}>
+      <Wallet size={15} strokeWidth={1.5} aria-hidden="true" /> {connecting ? 'Opening wallet…' : 'Sign in'}
     </button>
   );
 }

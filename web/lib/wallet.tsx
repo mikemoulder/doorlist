@@ -1,6 +1,6 @@
 'use client';
 // Wallet connection (EIP-6963 discovery, falling back to window.ethereum) and every write to the chain.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BaseError, ContractFunctionRevertedError, createWalletClient, custom, numberToHex, type Address, type Hash } from 'viem';
 import { client, DOORLIST, doorlistAbi, portaldot } from './chain';
 
@@ -93,10 +93,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const connect = useCallback(
-    async (w?: Announced) => {
-      const target = w ?? wallets[0];
-      if (!target) return undefined;
+  // connect() without a wallet opens the chooser and resolves once the person picks one or closes it.
+  const [picking, setPicking] = useState(false);
+  const [pickError, setPickError] = useState<string>();
+  const pending = useRef<(a: Address | undefined) => void>(undefined);
+
+  const connectTo = useCallback(
+    async (target: Announced) => {
       setConnecting(true);
       try {
         const [a] = (await target.provider.request({ method: 'eth_requestAccounts' })) as Address[];
@@ -110,7 +113,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setConnecting(false);
       }
     },
-    [wallets, ensureChain],
+    [ensureChain],
+  );
+
+  const connect = useCallback(
+    (w?: Announced) => {
+      if (w) return connectTo(w);
+      setPickError(undefined);
+      setPicking(true);
+      return new Promise<Address | undefined>((resolve) => {
+        pending.current = resolve;
+      });
+    },
+    [connectTo],
+  );
+
+  const closePicker = useCallback((a?: Address) => {
+    setPicking(false);
+    pending.current?.(a);
+    pending.current = undefined;
+  }, []);
+
+  const choose = useCallback(
+    async (w: Announced) => {
+      setPickError(undefined);
+      try {
+        closePicker(await connectTo(w));
+      } catch (err) {
+        setPickError(explain(err));
+      }
+    },
+    [connectTo, closePicker],
   );
 
   // Reconnect silently to the wallet used last time.
@@ -178,7 +211,55 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     () => ({ address, wallets, connecting, connect, disconnect, write, signMessage, sendValue }),
     [address, wallets, connecting, connect, disconnect, write, signMessage, sendValue],
   );
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      {picking && <WalletPicker wallets={wallets} connecting={connecting} error={pickError} onPick={choose} onClose={() => closePicker()} />}
+    </Ctx.Provider>
+  );
+}
+
+function WalletPicker({ wallets, connecting, error, onPick, onClose }: {
+  wallets: Announced[]; connecting: boolean; error?: string; onPick: (w: Announced) => void; onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  return (
+    <dialog ref={ref} className="picker" aria-labelledby="picker-title" onClose={onClose} onClick={(e) => e.target === ref.current && onClose()}>
+      <div className="picker-body">
+        <h2 id="picker-title">Sign in with a wallet</h2>
+        {wallets.length ? (
+          <ul>
+            {wallets.map((w) => (
+              <li key={w.info.rdns}>
+                <button className="picker-row" onClick={() => onPick(w)} disabled={connecting}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- wallet icons are data URIs from EIP-6963 */}
+                  {w.info.icon ? <img src={w.info.icon} alt="" width={28} height={28} /> : <span className="picker-blank" aria-hidden="true" />}
+                  <span>{w.info.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">No wallet found in this browser. Install SubWallet or MetaMask, then reload this page.</p>
+        )}
+        {connecting && <p className="faint">Check your wallet to approve the sign-in.</p>}
+        {error && <p className="notice notice-error">{error}</p>}
+        <div className="picker-foot">
+          {!wallets.length && (
+            <a className="pill pill-primary" href="https://www.subwallet.app/" target="_blank" rel="noreferrer">
+              Get SubWallet
+            </a>
+          )}
+          <button className="pill pill-ghost" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
 }
 
 export function useWallet() {

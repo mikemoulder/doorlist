@@ -325,3 +325,16 @@ textarea.input { height: auto; min-height: 96px; padding: 12px 14px; resize: ver
 .cover { background: var(--accent-pale); }
 .cover-type { color: var(--accent); }
 .cover-type .faint { color: var(--accent); opacity: 0.8; }
+
+/* wallet chooser: a native modal dialog, the one floating surface, so it carries the shadow */
+.picker { border: 0; padding: 0; border-radius: var(--radius-card); background: var(--card); color: var(--ink); width: min(400px, calc(100vw - 32px)); box-shadow: 0 24px 64px rgb(11 12 14 / 0.18); }
+.picker::backdrop { background: rgb(11 12 14 / 0.4); }
+.picker-body { display: grid; gap: 14px; padding: var(--card-pad); }
+.picker h2 { font-size: var(--fs-section); font-weight: 600; }
+.picker ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.picker-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--row-height); padding: 0 14px; border-radius: var(--radius-nested); background: var(--well); font-size: 15px; font-weight: 500; text-align: left; transition: background-color var(--t-hover); }
+.picker-row:hover:not([disabled]) { background: var(--accent-pale); }
+.picker-row[disabled] { opacity: 0.6; cursor: progress; }
+.picker-row img, .picker-blank { width: 28px; height: 28px; border-radius: 8px; flex: none; }
+.picker-blank { background: var(--surface); }
+.picker-foot { display: flex; justify-content: flex-end; gap: 8px; }
