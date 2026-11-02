@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { QrCode, Tag, Undo2 } from 'lucide-react';
 import { parseUnits } from 'viem';
 import { AppShell } from '@/components/AppShell';
+import { FirstRun, GhostLink, GUEST_STEPS, SignInAction } from '@/components/FirstRun';
 import { Cover, useMedia } from '@/components/EventBits';
 import { getEvent, getTicketsOf, phase, type DoorEvent, type Ticket } from '@/lib/doorlist';
 import { price, relative, when } from '@/lib/format';
@@ -12,7 +13,7 @@ import { explain, useWallet } from '@/lib/wallet';
 type Row = { t: Ticket; e: DoorEvent };
 
 export default function TicketsPage() {
-  const { address, connect } = useWallet();
+  const { address } = useWallet();
   const [rows, setRows] = useState<Row[]>();
   const [error, setError] = useState<string>();
 
@@ -43,12 +44,17 @@ export default function TicketsPage() {
       </div>
 
       {!address ? (
-        <div className="card first-run">
-          <p>Sign in with the wallet you bought with, and your tickets appear here.</p>
-          <button className="pill pill-primary" onClick={() => connect()}>
-            Sign in
-          </button>
-        </div>
+        <FirstRun
+          title="Your tickets live in your wallet"
+          line="Sign in with the wallet you bought with. Each ticket shows here with a code that refreshes every 10 seconds."
+          actions={
+            <>
+              <SignInAction />
+              <GhostLink href="/events/">Find an event</GhostLink>
+            </>
+          }
+          steps={GUEST_STEPS}
+        />
       ) : error ? (
         <p className="notice notice-error">
           {error}{' '}
@@ -59,12 +65,16 @@ export default function TicketsPage() {
       ) : !rows ? (
         <p className="faint">Loading your tickets…</p>
       ) : rows.length === 0 ? (
-        <div className="card first-run">
-          <p>No tickets in this wallet yet.</p>
-          <Link className="pill pill-primary" href="/events/">
-            Find an event
-          </Link>
-        </div>
+        <FirstRun
+          title="No tickets in this wallet yet"
+          line="Tickets you buy, and tickets friends buy for you, appear here as soon as Portaldot confirms them."
+          actions={
+            <Link className="pill pill-primary pill-lg" href="/events/">
+              Find an event
+            </Link>
+          }
+          steps={GUEST_STEPS}
+        />
       ) : (
         <div style={{ display: 'grid', gap: 16 }}>
           {refundable.length > 0 && <Group title="Refunds waiting" rows={refundable} onChange={load} />}

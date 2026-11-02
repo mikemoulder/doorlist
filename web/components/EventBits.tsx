@@ -23,7 +23,7 @@ export function DoorsBar({ e, checkedIn }: { e: DoorEvent; checkedIn?: number })
           </span>
         )}
         <span>
-          <i style={{ background: '#5d6b45' }} />
+          <i style={{ background: '#aab1f5' }} />
           {e.sold} sold
         </span>
         <span>{left === 0 ? 'Sold out' : `${left} of ${e.capacity} left`}</span>

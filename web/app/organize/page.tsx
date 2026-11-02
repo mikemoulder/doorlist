@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
 import { isAddress, parseEther, type Address } from 'viem';
 import { AppShell } from '@/components/AppShell';
+import { FirstRun, GhostLink, ORGANIZER_STEPS, SignInAction } from '@/components/FirstRun';
 import { Cover, DoorsBar, StatusTag, useMedia } from '@/components/EventBits';
 import { CreateEvent } from '@/components/CreateEvent';
 import { getCheckIns, getEvents, isDoor, PAYOUT_DELAY, FEE_BPS, type DoorEvent } from '@/lib/doorlist';
@@ -11,7 +12,7 @@ import { money, relative, when } from '@/lib/format';
 import { explain, useWallet } from '@/lib/wallet';
 
 export default function OrganizePage() {
-  const { address, connect } = useWallet();
+  const { address } = useWallet();
   const [events, setEvents] = useState<DoorEvent[]>();
   const [selected, setSelected] = useState<number>();
   const [creating, setCreating] = useState(false);
@@ -53,12 +54,17 @@ export default function OrganizePage() {
       </div>
 
       {!address ? (
-        <div className="card first-run">
-          <p>Sign in with the wallet you organize with.</p>
-          <button className="pill pill-primary" onClick={() => connect()}>
-            Sign in
-          </button>
-        </div>
+        <FirstRun
+          title="Sell tickets on Doorlist"
+          line="Sign in with the wallet you organize with. Listing an event has no Doorlist fee; Portaldot holds a small storage deposit."
+          actions={
+            <>
+              <SignInAction />
+              <GhostLink href="/#pricing">See the fees</GhostLink>
+            </>
+          }
+          steps={ORGANIZER_STEPS}
+        />
       ) : creating ? (
         <CreateEvent
           initial={prefill}
@@ -72,12 +78,16 @@ export default function OrganizePage() {
       ) : !events ? (
         <p className="faint">Loading your events…</p>
       ) : events.length === 0 ? (
-        <div className="card first-run">
-          <p>You haven’t created an event yet. It takes about two minutes and is free apart from Portaldot’s storage deposit.</p>
-          <button className="pill pill-primary" onClick={() => setCreating(true)}>
-            Create your first event
-          </button>
-        </div>
+        <FirstRun
+          title="Create your first event"
+          line="It takes about two minutes and has no Doorlist fee; Portaldot holds a small storage deposit."
+          actions={
+            <button className="pill pill-primary pill-lg" onClick={() => setCreating(true)}>
+              Create your first event
+            </button>
+          }
+          steps={ORGANIZER_STEPS}
+        />
       ) : (
         <>
           {events.length > 1 && (

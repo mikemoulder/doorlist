@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, RefreshCw } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
+import { FirstRun, GhostLink } from '@/components/FirstRun';
 import { Cover, StatusTag, useMedia } from '@/components/EventBits';
 import { getEvents, phase, type DoorEvent } from '@/lib/doorlist';
 import { price, when } from '@/lib/format';
@@ -63,6 +64,27 @@ export default function EventsPage() {
         ))}
       </div>
 
+      {events && events.length === 0 && !error ? (
+        <div style={{ marginTop: 16 }}>
+          <FirstRun
+            title="Nothing on sale yet"
+            line="Events appear here the moment an organizer creates one on Portaldot. Every figure on this screen is read from the Doorlist contract."
+            actions={
+              <>
+                <Link className="pill pill-primary pill-lg" href="/organize/">
+                  Create the first event
+                </Link>
+                <GhostLink href="/#how">How Doorlist works</GhostLink>
+              </>
+            }
+            steps={[
+              { title: 'An organizer creates the event', line: 'Name, date, price in dUSD or POT, capacity and a picture.' },
+              { title: 'Tickets go on sale at once', line: 'Buyers pay from their wallet. The contract holds the money until after the show.' },
+              { title: 'The door scans on the night', line: 'Each ticket gets in once. A screenshot or a second scan is refused.' },
+            ]}
+          />
+        </div>
+      ) : (
       <section className="card" style={{ marginTop: 16, padding: '6px 20px' }} aria-label={FILTERS.find((f) => f.key === filter)!.label}>
         {error ? (
           <div className="notice notice-error" style={{ margin: '14px 0' }}>
@@ -101,6 +123,7 @@ export default function EventsPage() {
           </ul>
         )}
       </section>
+      )}
     </AppShell>
   );
 }

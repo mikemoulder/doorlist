@@ -6,6 +6,7 @@ import { LogOut, Wallet } from 'lucide-react';
 import { Wordmark } from './Logo';
 import { useWallet } from '@/lib/wallet';
 import { shortAddress } from '@/lib/format';
+import { client, DOORLIST, EXPLORER } from '@/lib/chain';
 
 const NAV = [
   { href: '/events/', label: 'Events' },
@@ -44,6 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="a-main">
         <div className="a-col">{children}</div>
       </main>
+      <NetworkLine />
       <MobileNav path={path ?? ''} />
     </div>
   );
@@ -78,5 +80,38 @@ function MobileNav({ path }: { path: string }) {
         </Link>
       ))}
     </nav>
+  );
+}
+
+/** The chain this screen reads from, with its live block height (Portaldot makes a block every 6 s). */
+function NetworkLine() {
+  const [block, setBlock] = useState<bigint>();
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const tick = () =>
+      client
+        .getBlockNumber()
+        .then((b) => live && (setBlock(b), setDown(false)))
+        .catch(() => live && setDown(true));
+    tick();
+    const t = setInterval(tick, 6000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
+  return (
+    <footer className="a-foot">
+      <div className="a-col">
+        <span className={`a-live${down ? ' is-down' : ''}`} aria-hidden="true" />
+        <span>
+          {down ? 'Can’t reach Portaldot right now. Retrying every 6 seconds.' : block === undefined ? 'Connecting to Portaldot V3 testnet…' : <>Live from Portaldot V3 testnet at block <span className="num">{Number(block).toLocaleString('en-US')}</span>.</>}
+        </span>
+        <a className="link" href={EXPLORER} title={DOORLIST}>
+          Contract {shortAddress(DOORLIST)}
+        </a>
+      </div>
+    </footer>
   );
 }

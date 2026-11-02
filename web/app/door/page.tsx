@@ -7,6 +7,7 @@ import jsQR from 'jsqr';
 import { Camera, CheckCircle2, Copy, XCircle } from 'lucide-react';
 import { formatEther, type Address } from 'viem';
 import { AppShell } from '@/components/AppShell';
+import { FirstRun, GhostLink } from '@/components/FirstRun';
 import { DoorsBar } from '@/components/EventBits';
 import { client } from '@/lib/chain';
 import { getCheckIns, getEvent, getEvents, isDoor, phase, type DoorEvent } from '@/lib/doorlist';
@@ -43,11 +44,28 @@ function PickEvent() {
           <p>Turn this phone into a ticket scanner for one event.</p>
         </div>
       </div>
+      {events && events.length === 0 ? (
+        <FirstRun
+          title="Nothing to scan yet"
+          line="A door phone scans for one event at a time. Upcoming events appear here as soon as an organizer creates them."
+          actions={
+            <>
+              <Link className="pill pill-primary pill-lg" href="/organize/">
+                Create an event
+              </Link>
+              <GhostLink href="/events/">See events</GhostLink>
+            </>
+          }
+          steps={[
+            { title: 'Choose the event', line: 'This phone checks tickets for that event only.' },
+            { title: 'The organizer approves this phone', line: 'Once, from the organizer’s wallet. No pop-ups at the door after that.' },
+            { title: 'Point it at a ticket', line: 'Valid or Refused fills the screen, and the entry is written to Portaldot.' },
+          ]}
+        />
+      ) : (
       <section className="card" style={{ padding: '6px 20px' }}>
         {!events ? (
           <p className="faint" style={{ padding: '14px 0' }}>Loading events…</p>
-        ) : events.length === 0 ? (
-          <p className="empty" style={{ margin: '14px 0' }}>No upcoming events to scan for.</p>
         ) : (
           <ul className="rows">
             {events.map((e) => (
@@ -63,6 +81,7 @@ function PickEvent() {
           </ul>
         )}
       </section>
+      )}
     </>
   );
 }
