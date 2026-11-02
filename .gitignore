@@ -55,3 +55,6 @@ contracts/node_modules/
 web/.next/
 web/out/
 web/node_modules/
+
+# local AI tooling and design skills
+.claude/
