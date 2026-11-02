@@ -6,11 +6,11 @@ Portaldot's Revive EVM, and payments use either native tPOT or a Portaldot nativ
 through its ERC-20 precompile.
 
 ```text
- Organizer / Buyer browser            Door phone
- (MetaMask)                           (burner door key, no wallet popups)
+ Organizer / Buyer wallet             Door phone
+ (MetaMask)                           (door key, no wallet popups)
         |                                   |
-        |  createEvent, buy, list,          |  1. scan QR, verify signature locally
-        |  buyResale, rotateKey             |  2. checkIn(ticketId)
+        |  createEvent, buy, list,          |  1. scan QR, verify pass + signature
+        |  buyResale, transfer, withdraw    |  2. checkIn(ticketId)
         v                                   v
  +--------------------------------------------------+
  |  Doorlist.sol  (pallet_revive, chain 420420777)  |
@@ -28,15 +28,16 @@ through its ERC-20 precompile.
 |---|---|---|---|
 | 1 | Organizer creates "Demo Day", 25 dUSD, 50 seats | MetaMask tx | `createEvent` stores the event |
 | 2 | Organizer opens the door page on a phone | Generates a door key, organizer authorizes it | `setDoor(event, doorKey, true)` |
-| 3 | Guest buys a ticket | Generates a **ticket key** on the guest's device, approve + buy | `transferFrom` guest to organizer, ticket stores the key |
-| 4 | Guest opens the ticket | QR = `ticketId`, timestamp, signature by the ticket key, refreshed every 10s | none |
-| 5 | **Door scans: VALID** (the aha moment) | Signature recovers to `tickets[id].key`, under 30s old, not used | `checkIn` marks it used |
-| 6 | **Same QR or a screenshot: REFUSED** | Stale timestamp, or `used == true` | `checkIn` reverts `AlreadyUsed` |
-| 7 | Resale at any price | List, then another guest buys with a new key | Seller, organizer royalty and the 3% fee paid in one tx; the old key stops working |
+| 3 | Guest buys a ticket | Approve + buy from their wallet | Payment goes into escrow; a ticket token is minted to the guest's wallet |
+| 4 | Guest opens the ticket on a phone | Wallet signs a device pass once; the phone signs `ticketId + time` every 10s for the QR | none |
+| 5 | **Door scans: VALID** (the aha moment) | Pass signed by `ownerOf(ticketId)`, device signature under 30s old, ticket unused | `checkIn` marks it used |
+| 6 | **Same QR or a screenshot: REFUSED** | Stale timestamp, or the ticket is used | `checkIn` reverts `AlreadyUsed` |
+| 7 | Resale at any price, or a free gift | List and buy, or gift to a friend's wallet | Old token burned, new one minted; the old QR dies with the old id |
 
 ## Why it can't be faked or copied
 
-- **No copying:** the QR is signed every 10s by a key that never leaves the guest's device. A screenshot expires, and a forwarded link has no key.
+- **No copying:** tickets belong to wallets. A phone shows the QR only after the owner's wallet signs a pass for it, and the QR is re-signed every 10s, so a screenshot expires.
+- **Burn and re-mint:** every resale or gift burns the old token and mints a new one, so passes and QR codes made for the old id stop working.
 - **No double entry:** `checkIn` flips `used` on-chain. Two doors can't both admit the same ticket.
 - **No bulk buying:** organizers set a per-wallet limit per event, enforced on first sales and resales.
 - **No custody:** the contract never holds funds. Payments go from the buyer to each recipient in the same transaction.
@@ -45,9 +46,10 @@ through its ERC-20 precompile.
 
 | Flow | Treasury (Doorlist) | Organizer | Seller |
 |---|---|---|---|
-| First sale | 3% | 97% | none |
+| First sale (escrowed, paid from `startsAt + 24h`) | 3% | 97% | none |
 | Resale (seller sets any price) | 3% | royalty, 0 to 10%, chosen per event | the rest |
-| Refund (organizer pays back face price) | keeps its 3% | pays 100% | none |
+| Cancelled event | nothing | can never withdraw | each holder claims 100% back from escrow |
+| Gift to a friend | nothing | nothing | nothing |
 
 - **Creating an event is free.** The storage deposit Portaldot charges for on-chain data already makes spam cost money, and a creation fee would discourage the organizers who bring volume.
 - **Cancelling** marks the event cancelled and blocks sales, resales and check-ins. On-chain data can't be deleted.
