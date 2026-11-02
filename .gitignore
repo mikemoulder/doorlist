@@ -1,0 +1,45 @@
+.env
+*.keystore.json
+node_modules/
+
+# ── lock-and-load ──
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# Environment. NEVER commit these. Commit .env.example instead.
+.env
+.env.local
+.env*.local
+
+# Contracts
+cache/
+broadcast/*/31337/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor and OS
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Deliberately NOT ignored:
+#   *.md          docs/ is judge-facing evidence (architecture, integrations,
+#                 evaluation map). Ignoring markdown hides it.
+#   handoff.md    shared continuity. a teammate who slept needs to read it.
+#   memory.md     shared project knowledge.
+# See references/repo-hygiene.md before adding a markdown rule here.
+
+# Private research notes (competitor analysis, strategy)
+hack.md
