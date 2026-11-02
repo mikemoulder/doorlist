@@ -4,23 +4,28 @@ pragma solidity 0.8.24;
 /// @dev The subset of ERC-20 we use. On Portaldot, native `pallet_assets` tokens expose it
 /// through a precompile at 0x{assetId:8 hex}000000000000000000000000{00010000}.
 interface IERC20 {
+    function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-/// @title Doorlist: event tickets that can't be faked or copied.
+/// @title Doorlist: event tickets that can't be faked or copied, with refunds enforced by code.
 /// @notice Each ticket stores a "ticket key": an address whose private key lives only on
 /// the holder's phone. The phone signs a fresh (ticketId, timestamp) every few seconds for
 /// its QR code; the door app checks that signature against `tickets[id].key` off-chain,
 /// then calls `checkIn`. A screenshot expires, a copied QR fails the key check, and a
 /// second check-in reverts.
 ///
-/// Economics: every sale pays a 3% platform fee to `treasury`. Resales also pay the
-/// organizer a royalty they choose per event (0 to 10%). Organizers cap how many tickets
-/// one wallet may hold per event. Funds move buyer -> recipients in the same transaction;
-/// the contract never holds a balance.
+/// Money:
+/// - First sales are held in escrow by this contract. From `startsAt + 24h` the organizer
+///   withdraws them, minus a 3% platform fee to `treasury`.
+/// - Until then the organizer may cancel. A cancelled event can never be withdrawn; every
+///   ticket holder claims a full face-price refund directly from escrow. No organizer needed.
+/// - Resales at any price settle instantly: 3% fee, a per-event organizer royalty (0 to 10%),
+///   the rest to the seller. The buyer's key replaces the seller's in the same transaction.
 contract Doorlist {
     uint256 public constant PLATFORM_FEE_BPS = 300; // 3%
     uint256 public constant MAX_ROYALTY_BPS = 1000; // 10%
+    uint256 public constant PAYOUT_DELAY = 1 days; // after startsAt; also the end of the cancel window
 
     address public immutable treasury;
 
@@ -31,15 +36,17 @@ contract Doorlist {
         uint32 sold;
         uint32 maxPerWallet; // 0 = no limit
         uint16 royaltyBps; // organizer's cut of every resale
-        bool cancelled; // no sales, resales or check-ins once set
-        uint128 price; // in the smallest unit of `currency`
+        bool cancelled; // no sales, resales or check-ins; holders can claim refunds
+        uint128 price; // face price, in the smallest unit of `currency`
+        uint128 escrowed; // first-sale money held for this event
         address currency; // address(0) = native tPOT, else an ERC-20 (e.g. a native asset precompile)
         string name;
     }
 
     struct Ticket {
         uint64 eventId;
-        bool used;
+        bool used; // checked in
+        bool refunded;
         address owner;
         address key;
         uint128 askPrice; // 0 = not for resale
@@ -59,6 +66,7 @@ contract Doorlist {
     event CheckedIn(uint256 indexed ticketId, uint256 indexed eventId, address door);
     event EventCancelled(uint256 indexed eventId);
     event Refunded(uint256 indexed ticketId, address indexed holder, uint128 amount);
+    event Withdrawn(uint256 indexed eventId, uint256 toOrganizer, uint256 fee);
 
     error NotOrganizer();
     error NotOwner();
@@ -71,6 +79,9 @@ contract Doorlist {
     error NotListed();
     error PayoutFailed();
     error Cancelled();
+    error NotCancelled();
+    error TooEarly();
+    error TooLate();
 
     constructor(address treasury_) {
         treasury = treasury_;
@@ -87,7 +98,7 @@ contract Doorlist {
     ) external returns (uint256 eventId) {
         if (royaltyBps > MAX_ROYALTY_BPS) revert RoyaltyTooHigh();
         eventId = events.length;
-        events.push(Event(msg.sender, startsAt, capacity, 0, maxPerWallet, royaltyBps, false, price, currency, name));
+        events.push(Event(msg.sender, startsAt, capacity, 0, maxPerWallet, royaltyBps, false, price, 0, currency, name));
         emit EventCreated(eventId, msg.sender, name);
     }
 
@@ -97,23 +108,26 @@ contract Doorlist {
         emit DoorSet(eventId, door, allowed);
     }
 
+    /// @notice Buy at face price. The money stays in escrow until the organizer can withdraw.
     function buy(uint256 eventId, address key) external payable returns (uint256 ticketId) {
         Event storage e = events[eventId];
         if (e.cancelled) revert Cancelled();
         if (e.sold >= e.capacity) revert SoldOut();
         e.sold++;
+        e.escrowed += e.price;
         _hold(eventId, e.maxPerWallet);
         ticketId = tickets.length;
-        tickets.push(Ticket(uint64(eventId), false, msg.sender, key, 0));
+        tickets.push(Ticket(uint64(eventId), false, false, msg.sender, key, 0));
         emit TicketBought(ticketId, eventId, msg.sender, key);
-        _settle(e.currency, e.price, e.organizer, address(0), 0);
+        _checkValue(e.currency, e.price);
+        _send(e.currency, msg.sender, address(this), e.price);
     }
 
     /// @notice List a ticket for resale at any price. A price of 0 takes it off the market.
     function list(uint256 ticketId, uint128 price) external {
         Ticket storage t = tickets[ticketId];
         if (t.owner != msg.sender) revert NotOwner();
-        if (t.used) revert AlreadyUsed();
+        if (t.used || t.refunded) revert AlreadyUsed();
         t.askPrice = price;
         emit Listed(ticketId, price);
     }
@@ -121,7 +135,7 @@ contract Doorlist {
     function buyResale(uint256 ticketId, address newKey) external payable {
         Ticket storage t = tickets[ticketId];
         uint128 price = t.askPrice;
-        if (price == 0 || t.used) revert NotListed();
+        if (price == 0 || t.used || t.refunded) revert NotListed();
         Event storage e = events[t.eventId];
         if (e.cancelled) revert Cancelled();
         address seller = t.owner;
@@ -131,7 +145,12 @@ contract Doorlist {
         t.key = newKey; // the seller's phone key stops working immediately
         t.askPrice = 0;
         emit Resold(ticketId, seller, msg.sender, price);
-        _settle(e.currency, price, seller, e.organizer, e.royaltyBps);
+        _checkValue(e.currency, price);
+        uint256 fee = price * PLATFORM_FEE_BPS / 10_000;
+        uint256 royalty = price * e.royaltyBps / 10_000;
+        _send(e.currency, msg.sender, treasury, fee);
+        _send(e.currency, msg.sender, e.organizer, royalty);
+        _send(e.currency, msg.sender, seller, price - fee - royalty);
     }
 
     /// @notice New phone? Point the ticket at a new key; the old QR codes die.
@@ -152,36 +171,43 @@ contract Doorlist {
         emit CheckedIn(ticketId, t.eventId, msg.sender);
     }
 
-    /// @notice Stop all sales, resales and check-ins. On-chain data can't be deleted; the
-    /// event is marked cancelled for everyone to see.
+    /// @notice Cancel before the payout window opens. Sales, resales and check-ins stop, the
+    /// organizer can never withdraw, and every holder can claim a full refund.
     function cancelEvent(uint256 eventId) external {
         Event storage e = events[eventId];
         if (e.organizer != msg.sender) revert NotOrganizer();
+        if (block.timestamp >= e.startsAt + PAYOUT_DELAY) revert TooLate();
         e.cancelled = true;
         emit EventCancelled(eventId);
     }
 
-    /// @notice The organizer pays the current holder back the face price and voids the ticket.
-    /// The 3% platform fee is not returned. Works before or after `cancelEvent`.
-    function refund(uint256 ticketId) external payable {
+    /// @notice Holder of a ticket for a cancelled event takes back the face price from escrow.
+    function claimRefund(uint256 ticketId) external {
         Ticket storage t = tickets[ticketId];
         Event storage e = events[t.eventId];
-        if (e.organizer != msg.sender) revert NotOrganizer();
-        if (t.used) revert AlreadyUsed();
-        t.used = true; // void: can't be checked in, listed or resold
+        if (!e.cancelled) revert NotCancelled();
+        if (t.owner != msg.sender) revert NotOwner();
+        if (t.refunded) revert AlreadyUsed();
+        t.refunded = true;
         t.askPrice = 0;
-        held[t.eventId][t.owner]--;
-        emit Refunded(ticketId, t.owner, e.price);
-        if (e.currency == address(0) ? msg.value != e.price : msg.value != 0) revert WrongPayment();
-        _send(e.currency, t.owner, e.price);
+        e.escrowed -= e.price;
+        emit Refunded(ticketId, msg.sender, e.price);
+        _send(e.currency, address(this), msg.sender, e.price);
     }
 
-    function eventCount() external view returns (uint256) {
-        return events.length;
-    }
-
-    function ticketCount() external view returns (uint256) {
-        return tickets.length;
+    /// @notice From startsAt + 24h, pay the organizer everything in escrow, minus the 3% fee.
+    /// Callable again for any later sales.
+    function withdraw(uint256 eventId) external {
+        Event storage e = events[eventId];
+        if (e.organizer != msg.sender) revert NotOrganizer();
+        if (e.cancelled) revert Cancelled();
+        if (block.timestamp < e.startsAt + PAYOUT_DELAY) revert TooEarly();
+        uint256 amount = e.escrowed;
+        e.escrowed = 0;
+        uint256 fee = amount * PLATFORM_FEE_BPS / 10_000;
+        emit Withdrawn(eventId, amount - fee, fee);
+        _send(e.currency, address(this), treasury, fee);
+        _send(e.currency, address(this), msg.sender, amount - fee);
     }
 
     function _hold(uint256 eventId, uint32 maxPerWallet) private {
@@ -189,24 +215,18 @@ contract Doorlist {
         if (maxPerWallet != 0 && n > maxPerWallet) revert WalletLimit();
     }
 
-    /// @dev Splits `amount` paid by msg.sender: 3% to treasury, `royaltyBps` to `royaltyTo`,
-    /// the rest to `payee`. Every transfer goes straight from the buyer.
-    function _settle(address currency, uint256 amount, address payee, address royaltyTo, uint256 royaltyBps)
-        private
-    {
+    function _checkValue(address currency, uint256 amount) private view {
         if (currency == address(0) ? msg.value != amount : msg.value != 0) revert WrongPayment();
-        uint256 fee = amount * PLATFORM_FEE_BPS / 10_000;
-        uint256 royalty = amount * royaltyBps / 10_000;
-        _send(currency, treasury, fee);
-        _send(currency, royaltyTo, royalty);
-        _send(currency, payee, amount - fee - royalty);
     }
 
-    function _send(address currency, address to, uint256 amount) private {
-        if (amount == 0) return;
+    /// @dev Native tPOT always moves out of this contract's balance (msg.value has already
+    /// arrived). ERC-20s move from `from`: the buyer via allowance, or this contract.
+    function _send(address currency, address from, address to, uint256 amount) private {
+        if (amount == 0 || to == address(this) && currency == address(0)) return;
         bool ok;
         if (currency == address(0)) (ok,) = to.call{value: amount}("");
-        else ok = IERC20(currency).transferFrom(msg.sender, to, amount);
+        else if (from == address(this)) ok = IERC20(currency).transfer(to, amount);
+        else ok = IERC20(currency).transferFrom(from, to, amount);
         if (!ok) revert PayoutFailed();
     }
 }
