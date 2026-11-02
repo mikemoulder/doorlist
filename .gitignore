@@ -43,3 +43,8 @@ Thumbs.db
 
 # Private research notes (competitor analysis, strategy)
 hack.md
+
+# Hardhat
+contracts/artifacts/
+contracts/cache/
+contracts/node_modules/
