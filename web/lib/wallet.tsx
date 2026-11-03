@@ -275,7 +275,7 @@ function WalletPicker({ wallets, connecting, onEvm, onSubstrate, onDone }: {
   onDone: (a?: Address) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const [extensions, setExtensions] = useState<{ source: string; title: string }[]>([]);
+  const [extensions, setExtensions] = useState<{ source: string; title: string; icon?: string }[]>([]);
   const [accounts, setAccounts] = useState<{ title: string; list: SubstrateAccount[] }>();
   const [error, setError] = useState<string>();
 
@@ -333,7 +333,8 @@ function WalletPicker({ wallets, connecting, onEvm, onSubstrate, onDone }: {
             {extensions.map((x) => (
               <li key={`sub-${x.source}`}>
                 <button className="picker-row" onClick={() => openExtension(x.source, x.title)} disabled={connecting}>
-                  <span className="picker-blank" aria-hidden="true" />
+                  {/* eslint-disable-next-line @next/next/no-img-element -- tiny static icon; next/image is off in the static export */}
+                  {x.icon ? <img src={x.icon} alt="" width={28} height={28} /> : <span className="picker-blank" aria-hidden="true" />}
                   <span>{x.title}</span>
                 </button>
               </li>

@@ -30,11 +30,16 @@ const TITLES: Record<string, string> = {
   talisman: 'Talisman',
 };
 
+/** Icons we ship for extensions that do not announce one (Substrate extensions have no icon field). */
+const ICONS: Record<string, string> = {
+  'portaldot extension': '/wallets/portaldot.png', // from the official extension package (images/icon-64.png)
+};
+
 /** Substrate extensions present in this browser, official Portaldot Wallet first. */
-export function substrateExtensions(): { source: string; title: string }[] {
+export function substrateExtensions(): { source: string; title: string; icon?: string }[] {
   const injected = (window as unknown as InjectedWindow).injectedWeb3 ?? {};
   return Object.keys(injected)
-    .map((source) => ({ source, title: TITLES[source] ?? source }))
+    .map((source) => ({ source, title: TITLES[source] ?? source, icon: ICONS[source] }))
     .sort((a, b) => Number(b.source === 'portaldot extension') - Number(a.source === 'portaldot extension'));
 }
 
