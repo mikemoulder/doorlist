@@ -52,12 +52,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 export function Account() {
-  const { address, connect, disconnect, connecting } = useWallet();
+  const { address, ss58, connect, disconnect, connecting } = useWallet();
   if (address)
     return (
       <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-        <span className="pill pill-ghost num" title={address}>
-          <Wallet size={15} strokeWidth={1.5} aria-hidden="true" /> {shortAddress(address)}
+        {/* A Portaldot (5...) account is shown as itself; the 0x address is only how contracts see it. */}
+        <span className="pill pill-ghost num" title={ss58 ? `${ss58}\nIn contracts: ${address}` : address}>
+          <Wallet size={15} strokeWidth={1.5} aria-hidden="true" /> {shortAddress(ss58 ?? address)}
         </span>
         <button className="pill pill-ghost" onClick={disconnect} aria-label="Sign out">
           <LogOut size={15} strokeWidth={1.5} aria-hidden="true" />
