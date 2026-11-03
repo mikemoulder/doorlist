@@ -107,7 +107,7 @@ export default function OrganizePage() {
 }
 
 function EventOverview({ e, onChange }: { e: DoorEvent; onChange: () => void }) {
-  const media = useMedia(e.uri);
+  const media = useMedia(e);
   const [checkedIn, setCheckedIn] = useState<number>();
   useEffect(() => {
     getCheckIns(e.id).then(setCheckedIn);

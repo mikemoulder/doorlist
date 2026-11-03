@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import type { DoorEvent } from '@/lib/doorlist';
-import { phase } from '@/lib/doorlist';
+import { phase, uriFromSubstrate } from '@/lib/doorlist';
 import { loadMedia, type MediaBundle } from '@/lib/media';
 import { when } from '@/lib/format';
 
@@ -41,16 +41,21 @@ export function StatusTag({ e }: { e: DoorEvent }) {
   return <span className="tag tag-pos">On sale</span>;
 }
 
-export function useMedia(uri?: string) {
+/** An event's media. When the eth logs had no link (event made from a Portaldot Wallet), finds it on the Substrate side first. */
+export function useMedia(e?: { id: number; uri?: string } | null) {
   const [media, setMedia] = useState<MediaBundle | null | undefined>(undefined);
+  const id = e?.id;
+  const uri = e?.uri;
   useEffect(() => {
     let live = true;
     setMedia(undefined);
-    loadMedia(uri).then((m) => live && setMedia(m));
+    if (id === undefined) return;
+    const link = uri !== undefined ? Promise.resolve(uri) : uriFromSubstrate(id).catch(() => undefined);
+    link.then((u) => loadMedia(u || undefined)).then((m) => live && setMedia(m));
     return () => {
       live = false;
     };
-  }, [uri]);
+  }, [id, uri]);
   return media; // undefined = loading, null = none
 }
 

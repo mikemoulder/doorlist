@@ -28,7 +28,7 @@ function TicketView() {
   const [e, setE] = useState<DoorEvent>();
   const [pass, setPass] = useState<`0x${string}` | null>(null);
   const [error, setError] = useState<string>();
-  const media = useMedia(e?.uri);
+  const media = useMedia(e);
 
   useEffect(() => {
     getTicket(id)

@@ -17,7 +17,7 @@ export type DoorEvent = {
   escrowed: bigint;
   currency: Currency;
   name: string;
-  uri?: string; // latest UriSet: where its media bundle lives
+  uri?: string; // latest UriSet from eth logs; '' = no media; undefined = no log seen (Portaldot Wallet), see resolveUri
 };
 
 export type Ticket = {
@@ -56,7 +56,7 @@ const URI_SET = 'event UriSet(uint256 indexed eventId, string uri)';
  * Substrate side. Cached per event in this browser: a creation link never changes.
  * Not covered: a later setUri sent from a Portaldot Wallet.
  */
-async function uriFromSubstrate(id: number): Promise<string | undefined> {
+export async function uriFromSubstrate(id: number): Promise<string | undefined> {
   const key = `doorlist.uri.${DOORLIST}.${id}`;
   try {
     const cached = localStorage.getItem(key);
@@ -95,7 +95,7 @@ async function uriFromSubstrate(id: number): Promise<string | undefined> {
 export async function getEvent(id: number): Promise<DoorEvent> {
   const [e, uriLogs] = await Promise.all([read<EventTuple>('events', [BigInt(id)]), logs(URI_SET, { eventId: BigInt(id) })]);
   const last = uriLogs.at(-1) as unknown as { args: { uri: string } } | undefined;
-  const uri = last?.args.uri || (await uriFromSubstrate(id).catch(() => undefined));
+  const uri = last ? last.args.uri : undefined; // the Substrate lookup runs later, in useMedia, so the page does not wait
   return {
     id,
     organizer: e[0],

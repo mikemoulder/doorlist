@@ -103,7 +103,7 @@ function Group({ title, rows, onChange }: { title: string; rows: Row[]; onChange
 }
 
 function TicketRow({ t, e, onChange }: Row & { onChange: () => void }) {
-  const media = useMedia(e.uri);
+  const media = useMedia(e);
   const { write } = useWallet();
   const [selling, setSelling] = useState(false);
   const [ask, setAsk] = useState('');

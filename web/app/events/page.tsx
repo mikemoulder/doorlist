@@ -129,7 +129,7 @@ export default function EventsPage() {
 }
 
 function EventRow({ e }: { e: DoorEvent }) {
-  const media = useMedia(e.uri);
+  const media = useMedia(e);
   const d = when(e.startsAt);
   const left = e.capacity - e.sold;
   return (

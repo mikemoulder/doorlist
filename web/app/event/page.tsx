@@ -26,7 +26,7 @@ function EventView() {
   const [e, setE] = useState<DoorEvent | null>();
   const [checkedIn, setCheckedIn] = useState<number>();
   const [listings, setListings] = useState<Ticket[]>([]);
-  const media = useMedia(e?.uri);
+  const media = useMedia(e);
 
   const load = useCallback(() => {
     getEvent(id).then(setE).catch(() => setE(null));
