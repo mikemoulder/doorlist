@@ -7,7 +7,7 @@ import { cryptoWaitReady, jsonDecrypt } from '@polkadot/util-crypto';
 import { u8aToString } from '@polkadot/util';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 
-const { KEYSTORE_FILE = './wallet.keystore.json', KEYSTORE_PASSWORD, WS_URL = 'wss://test-node-v3.portaldot.dev' } = process.env;
+const { KEYSTORE_FILE = './wallet.keystore.json', KEYSTORE_PASSWORD, WS_URL = 'wss://test-node-v3.portaldot.dev' } = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== '')); // empty .env values fall back to the defaults
 const amount = BigInt(process.argv[2] ?? 450) * 10n ** 14n; // tPOT has 14 decimals
 await cryptoWaitReady();
 

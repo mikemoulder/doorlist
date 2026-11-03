@@ -14,7 +14,7 @@ const {
   EXPECTED_ADDRESS = '5G9p1xhSJsE1vjNtHXmXFZ6rxdWEpCEBkD4KWL5Pvic7LGuw',
   WS_URL = 'wss://test-node-v3.portaldot.dev',
   EVM_RPC = 'https://test-evm-rpc-v3.portaldot.dev',
-} = process.env;
+} = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== '')); // empty .env values fall back to the defaults
 
 if (!KEYSTORE_PASSWORD) { console.error('Set KEYSTORE_PASSWORD in .env'); process.exit(1); }
 await cryptoWaitReady();

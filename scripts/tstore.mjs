@@ -9,7 +9,7 @@ import { cryptoWaitReady, jsonDecrypt, blake2AsHex } from '@polkadot/util-crypto
 import { u8aToString, u8aToHex } from '@polkadot/util';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 
-const { KEYSTORE_FILE = './wallet.keystore.json', KEYSTORE_PASSWORD, WS_URL = 'wss://test-node-v3.portaldot.dev' } = process.env;
+const { KEYSTORE_FILE = './wallet.keystore.json', KEYSTORE_PASSWORD, WS_URL = 'wss://test-node-v3.portaldot.dev' } = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== '')); // empty .env values fall back to the defaults
 const [cmd, ...args] = process.argv.slice(2);
 await cryptoWaitReady();
 const api = await ApiPromise.create({ provider: new WsProvider(WS_URL), noInitWarn: true });

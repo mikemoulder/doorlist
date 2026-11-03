@@ -7,7 +7,7 @@ import { decodePair } from '@polkadot/keyring/pair/decode';
 import { cryptoWaitReady, jsonDecrypt, base64Decode } from '@polkadot/util-crypto';
 import { u8aToString, u8aToHex } from '@polkadot/util';
 
-const { KEYSTORE_FILE = './wallet.keystore.json', KEYSTORE_PASSWORD } = process.env;
+const { KEYSTORE_FILE = './wallet.keystore.json', KEYSTORE_PASSWORD } = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== '')); // empty .env values fall back to the defaults
 
 async function entries() {
   if (!KEYSTORE_PASSWORD) throw new Error('Set KEYSTORE_PASSWORD in .env');
