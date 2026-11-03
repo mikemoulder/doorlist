@@ -79,7 +79,13 @@ Contract tests: `cd contracts && npm install && npx hardhat test` (21 tests).
 
 **Not built yet:** renewing event pictures after about 7 days (`transactionStorage` expiry), a Pinata backup copy, a native mobile app, mainnet.
 
-**Limits worth knowing:** storage deposits cost real testnet POT (up to about 15 per ticket, 20 per event). Resale prices are not capped, only routed through Doorlist with a royalty. A Portaldot Wallet event's picture takes about 20 seconds on a first visit, then is cached. Fees go to a treasury address we control.
+## Limitations
+
+- Storage deposits cost real testnet POT: up to about 15 POT per ticket and about 20 POT per event.
+- Doorlist does not cap resale prices. Every resale goes through the contract and pays the organizer a royalty, but a seller can still ask any price.
+- On a first visit, the picture of an event created from a Portaldot Wallet takes about 20 seconds to appear; later visits are cached in the browser.
+- If a Portaldot Wallet organizer later changes an event's pictures, the app still shows the originals (only the creation link is recovered).
+- Fees go to a treasury address we control.
 
 ## Roadmap
 
