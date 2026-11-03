@@ -6,10 +6,16 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   webpack(config) {
-    // Our own chunk registry name. Wallet extensions that inject Next.js-built scripts share the default
-    // `webpackChunk_N_E`; that broke chunks loaded on demand (polkadot.js on sign-in): "Loading chunk failed (missing)".
+    // Our own chunk registry name instead of the default `webpackChunk_N_E`, so scripts injected by other
+    // Next.js-built code (e.g. wallet extensions) can never share it. Defensive only: it was not the cause of
+    // the sign-in failure, which was the SWC bug below.
     config.output.chunkLoadingGlobal = 'webpackChunk_doorlist';
     config.output.uniqueName = 'doorlist';
+    // SWC minifier bug: @scure/sr25519's `proving${'\0'}0` becomes an invalid octal escape. See tools/fix-sr25519-loader.cjs.
+    config.module.rules.push({
+      test: /[\\/]node_modules[\\/]@scure[\\/]sr25519[\\/].*\.js$/,
+      use: [{ loader: require.resolve('./tools/fix-sr25519-loader.cjs') }],
+    });
     return config;
   },
 };
